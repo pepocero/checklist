@@ -4,15 +4,13 @@ import {
   clearDeferredInstallPrompt,
   getDeferredInstallPrompt,
   subscribeInstallPrompt,
+  waitForInstallPrompt,
 } from '../utils/installPrompt'
 import { isIosDevice, isRunningAsInstalledPwa } from '../utils/pwa'
 
 const DISMISS_KEY = 'checklist-install-dismissed'
 
 export function InstallPrompt() {
-  const [canNativeInstall, setCanNativeInstall] = useState(
-    () => getDeferredInstallPrompt() !== null,
-  )
   const [dismissed, setDismissed] = useState(() => {
     if (typeof sessionStorage === 'undefined') {
       return false
@@ -20,11 +18,15 @@ export function InstallPrompt() {
     return sessionStorage.getItem(DISMISS_KEY) === '1'
   })
   const [installed, setInstalled] = useState(() => isRunningAsInstalledPwa())
+  const [busy, setBusy] = useState(false)
+  const [manualHint, setManualHint] = useState(false)
 
   useEffect(() => {
     function sync() {
-      setCanNativeInstall(getDeferredInstallPrompt() !== null)
       setInstalled(isRunningAsInstalledPwa())
+      if (getDeferredInstallPrompt()) {
+        setManualHint(false)
+      }
     }
 
     sync()
@@ -38,19 +40,29 @@ export function InstallPrompt() {
   const ios = isIosDevice()
 
   async function install() {
-    const event = getDeferredInstallPrompt()
-    if (!event) {
-      return
-    }
+    setBusy(true)
+    setManualHint(false)
 
-    await event.prompt()
-    const choice = await event.userChoice
-    clearDeferredInstallPrompt()
+    try {
+      const event =
+        getDeferredInstallPrompt() ?? (await waitForInstallPrompt(2500))
 
-    if (choice.outcome === 'accepted') {
-      setInstalled(true)
-    } else {
-      setCanNativeInstall(false)
+      if (!event) {
+        setManualHint(true)
+        return
+      }
+
+      await event.prompt()
+      const choice = await event.userChoice
+      clearDeferredInstallPrompt()
+
+      if (choice.outcome === 'accepted') {
+        setInstalled(true)
+      }
+    } catch {
+      setManualHint(true)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -65,23 +77,31 @@ export function InstallPrompt() {
         <p className="install-title">Instala CheckList</p>
         {ios ? (
           <p>
-            En Safari, pulsa <Share size={14} strokeWidth={2.2} className="install-inline-icon" aria-hidden="true" />{' '}
+            En Safari, pulsa{' '}
+            <Share size={14} strokeWidth={2.2} className="install-inline-icon" aria-hidden="true" />{' '}
             y elige <strong>Añadir a pantalla de inicio</strong>.
           </p>
-        ) : canNativeInstall ? (
-          <p>Instálala para abrirla como una app y usarla sin conexión.</p>
-        ) : (
+        ) : manualHint ? (
           <p>
-            Desde el menú del navegador elige <strong>Instalar aplicación</strong> o{' '}
-            <strong>Añadir a la pantalla de inicio</strong>.
+            Si no aparece el diálogo, abre el menú del navegador y elige{' '}
+            <strong>Instalar aplicación</strong>.
           </p>
+        ) : (
+          <p>Instálala para abrirla como una app y usarla sin conexión.</p>
         )}
       </div>
       <div className="install-actions">
-        {canNativeInstall && !ios ? (
-          <button type="button" className="btn btn-primary" onClick={() => void install()}>
+        {!ios ? (
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy}
+            onClick={() => {
+              void install()
+            }}
+          >
             <Download size={18} strokeWidth={2.2} aria-hidden="true" />
-            <span>Instalar</span>
+            <span>{busy ? 'Preparando…' : 'Instalar'}</span>
           </button>
         ) : null}
         <button type="button" className="icon-btn" aria-label="Cerrar" onClick={dismiss}>

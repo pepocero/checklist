@@ -49,3 +49,36 @@ export function subscribeInstallPrompt(listener: Listener): () => void {
     listeners.delete(listener)
   }
 }
+
+export function waitForInstallPrompt(
+  timeoutMs = 2500,
+): Promise<BeforeInstallPromptEvent | null> {
+  const current = getDeferredInstallPrompt()
+  if (current) {
+    return Promise.resolve(current)
+  }
+
+  return new Promise((resolve) => {
+    let settled = false
+
+    const finish = (value: BeforeInstallPromptEvent | null) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      window.clearTimeout(timer)
+      unsubscribe()
+      resolve(value)
+    }
+
+    const unsubscribe = subscribeInstallPrompt(() => {
+      const next = getDeferredInstallPrompt()
+      if (next) {
+        finish(next)
+      }
+    })
+
+    const timer = window.setTimeout(() => finish(null), timeoutMs)
+  })
+}
+

@@ -1,6 +1,7 @@
 import { ArrowLeft, Pencil, RotateCcw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ActionBar } from '../components/ActionBar'
 import { AppHeader } from '../components/AppHeader'
 import { ChecklistItem } from '../components/ChecklistItem'
 import { ChecklistProgress } from '../components/ChecklistProgress'
@@ -81,6 +82,23 @@ export function ChecklistPage() {
 
       <ChecklistProgress completed={completedCount} total={totalCount} />
 
+      {tasks.length > 0 ? (
+        <ActionBar ariaLabel="Acciones de la lista">
+          <Link to={`/lista/${list.id}/editar`} className="btn btn-edit">
+            <Pencil size={18} strokeWidth={2.1} aria-hidden="true" />
+            <span>Editar</span>
+          </Link>
+          <button
+            type="button"
+            className="btn btn-reset"
+            onClick={() => setConfirmReset(true)}
+          >
+            <RotateCcw size={18} strokeWidth={2.1} aria-hidden="true" />
+            <span>Reiniciar</span>
+          </button>
+        </ActionBar>
+      ) : null}
+
       {tasks.length === 0 ? (
         <div className="empty-state">
           <p>Esta lista no tiene tareas. Añade algunas desde editar.</p>
@@ -96,23 +114,6 @@ export function ChecklistPage() {
           ))}
         </div>
       )}
-
-      {tasks.length > 0 ? (
-        <div className="page-actions">
-          <Link to={`/lista/${list.id}/editar`} className="btn btn-ghost">
-            <Pencil size={18} strokeWidth={2.1} aria-hidden="true" />
-            <span>Editar lista</span>
-          </Link>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => setConfirmReset(true)}
-          >
-            <RotateCcw size={18} strokeWidth={2.1} aria-hidden="true" />
-            <span>Reiniciar tarea</span>
-          </button>
-        </div>
-      ) : null}
 
       <CompletionDialog
         open={showCompletion && !confirmReset}

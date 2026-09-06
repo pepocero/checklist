@@ -17,6 +17,7 @@ import {
 import { Check, Copy, Plus, Share2, Trash2 } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { ActionBar } from '../components/ActionBar'
 import { AppHeader } from '../components/AppHeader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { SortableTaskRow } from '../components/SortableTaskRow'
@@ -292,46 +293,45 @@ export function EditListPage() {
         title="Editar lista"
         subtitle="Los cambios se guardan automáticamente"
         backTo={`/lista/${list.id}`}
-        actions={
-          <>
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label="Copiar lista en texto"
-              title="Copiar lista en texto"
-              onClick={() => {
-                void handleCopyList()
-              }}
-            >
-              {copyFeedback ? (
-                <Check size={18} strokeWidth={2.1} />
-              ) : (
-                <Copy size={18} strokeWidth={2.1} />
-              )}
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label="Compartir lista"
-              title="Compartir lista"
-              onClick={() => {
-                void handleShareList()
-              }}
-            >
-              <Share2 size={18} strokeWidth={2.1} />
-            </button>
-            <button
-              type="button"
-              className="icon-btn danger"
-              aria-label="Eliminar lista"
-              title="Eliminar lista"
-              onClick={() => setPendingDeleteList(true)}
-            >
-              <Trash2 size={18} strokeWidth={2.1} />
-            </button>
-          </>
-        }
       />
+
+      <ActionBar ariaLabel="Acciones de edición">
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Copiar lista en texto"
+          title="Copiar lista en texto"
+          onClick={() => {
+            void handleCopyList()
+          }}
+        >
+          {copyFeedback ? (
+            <Check size={18} strokeWidth={2.1} />
+          ) : (
+            <Copy size={18} strokeWidth={2.1} />
+          )}
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Compartir lista"
+          title="Compartir lista"
+          onClick={() => {
+            void handleShareList()
+          }}
+        >
+          <Share2 size={18} strokeWidth={2.1} />
+        </button>
+        <button
+          type="button"
+          className="icon-btn danger"
+          aria-label="Eliminar lista"
+          title="Eliminar lista"
+          onClick={() => setPendingDeleteList(true)}
+        >
+          <Trash2 size={18} strokeWidth={2.1} />
+        </button>
+      </ActionBar>
 
       {error ? <p className="banner error">{error}</p> : null}
 

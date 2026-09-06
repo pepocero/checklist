@@ -1,15 +1,13 @@
 import { ArrowLeft } from 'lucide-react'
-import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 interface AppHeaderProps {
   title: string
   subtitle?: string
   backTo?: string
-  actions?: ReactNode
 }
 
-export function AppHeader({ title, subtitle, backTo, actions }: AppHeaderProps) {
+export function AppHeader({ title, subtitle, backTo }: AppHeaderProps) {
   const navigate = useNavigate()
 
   return (
@@ -33,7 +31,6 @@ export function AppHeader({ title, subtitle, backTo, actions }: AppHeaderProps) 
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
       </div>
-      {actions ? <div className="app-header-actions">{actions}</div> : null}
     </header>
   )
 }

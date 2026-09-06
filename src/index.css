@@ -115,7 +115,7 @@ button {
 .app-header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 16px;
   padding: 18px;
   border-radius: var(--radius);
@@ -126,6 +126,7 @@ button {
   align-items: flex-start;
   gap: 12px;
   min-width: 0;
+  width: 100%;
 }
 
 .app-header-copy {
@@ -157,6 +158,52 @@ button {
   gap: 8px;
   flex-wrap: nowrap;
   flex-shrink: 0;
+}
+
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+.action-bar .btn,
+.action-bar .icon-btn {
+  flex: 1 1 0;
+  min-width: var(--tap);
+}
+
+.action-bar .btn {
+  padding-inline: 14px;
+}
+
+.btn-edit {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: transparent;
+}
+
+.btn-edit:hover {
+  background: #f3d7c3;
+  color: var(--accent-hover);
+}
+
+.btn-reset {
+  background: var(--success-soft);
+  color: var(--success);
+  border-color: transparent;
+}
+
+.btn-reset:hover {
+  background: #d5e8dc;
 }
 
 .page-actions,
@@ -637,9 +684,10 @@ textarea:focus-visible {
   }
 
   .app-header-actions .icon-btn,
-  .app-header-actions .btn {
+  .app-header-actions .btn,
+  .action-bar .btn,
+  .action-bar .icon-btn {
     width: auto;
-    flex: 0 0 auto;
   }
 
   .landing-enter-btn,

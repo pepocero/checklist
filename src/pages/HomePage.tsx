@@ -1,6 +1,7 @@
 import { ClipboardList, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { ActionBar } from '../components/ActionBar'
 import { AppHeader } from '../components/AppHeader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { InstallPrompt } from '../components/InstallPrompt'
@@ -32,13 +33,14 @@ export function HomePage() {
       <AppHeader
         title="Mis listas"
         subtitle="CheckList · Creador de listas de verificación"
-        actions={
-          <Link to="/nueva" className="btn btn-primary">
-            <Plus size={20} strokeWidth={2.3} aria-hidden="true" />
-            <span>Nueva lista</span>
-          </Link>
-        }
       />
+
+      <ActionBar ariaLabel="Crear lista">
+        <Link to="/nueva" className="btn btn-primary">
+          <Plus size={20} strokeWidth={2.3} aria-hidden="true" />
+          <span>Nueva lista</span>
+        </Link>
+      </ActionBar>
 
       <InstallPrompt />
 
