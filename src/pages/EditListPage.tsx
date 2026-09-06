@@ -56,6 +56,7 @@ export function EditListPage() {
   const [pendingDeleteTask, setPendingDeleteTask] = useState<Task | null>(null)
   const [busy, setBusy] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState(false)
+  const [swipeCloseSignals, setSwipeCloseSignals] = useState<Record<string, number>>({})
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -370,6 +371,7 @@ export function EditListPage() {
                 key={task.id}
                 task={task}
                 draftText={drafts[task.id] ?? task.text}
+                closeSwipeSignal={swipeCloseSignals[task.id] ?? 0}
                 onDraftChange={(taskId, text) => {
                   setDrafts((current) => ({ ...current, [taskId]: text }))
                 }}
@@ -420,7 +422,16 @@ export function EditListPage() {
         message="La tarea se eliminará de esta lista. El resto de elementos y su progreso se mantendrán."
         confirmLabel={busy ? 'Eliminando…' : 'Eliminar tarea'}
         danger
-        onCancel={() => setPendingDeleteTask(null)}
+        onCancel={() => {
+          if (pendingDeleteTask) {
+            const taskId = pendingDeleteTask.id
+            setSwipeCloseSignals((current) => ({
+              ...current,
+              [taskId]: (current[taskId] ?? 0) + 1,
+            }))
+          }
+          setPendingDeleteTask(null)
+        }}
         onConfirm={() => {
           void confirmDeleteTask()
         }}

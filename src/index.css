@@ -468,7 +468,7 @@ textarea:focus-visible {
 
 .edit-task-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   border-radius: 14px;
@@ -482,9 +482,45 @@ textarea:focus-visible {
   opacity: 0.96;
 }
 
+.edit-task-swipe {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.edit-task-delete {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 76px;
+  border: 0;
+  border-radius: 0 14px 14px 0;
+  background: var(--danger);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.edit-task-front {
+  position: relative;
+  z-index: 1;
+  background: #fff;
+  border-radius: 14px;
+  transition: transform 0.18s ease;
+  touch-action: pan-y;
+}
+
+.edit-task-front.is-swiping {
+  transition: none;
+  touch-action: none;
+}
+
 .edit-task-row input {
   box-shadow: none;
   min-height: var(--tap);
+  min-width: 0;
 }
 
 .drag-handle {
@@ -697,7 +733,7 @@ textarea:focus-visible {
   }
 
   .edit-task-row {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 6px;
   }
 
@@ -705,8 +741,7 @@ textarea:focus-visible {
     min-width: 0;
   }
 
-  .edit-task-row .drag-handle,
-  .edit-task-row .icon-btn.danger {
+  .edit-task-row .drag-handle {
     min-width: 40px;
     min-height: 40px;
   }
