@@ -25,7 +25,7 @@ export default defineConfig({
         orientation: 'any',
         start_url: '/app',
         scope: '/',
-        id: '/',
+        id: '/app',
         categories: ['productivity', 'utilities'],
         icons: [
           {

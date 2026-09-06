@@ -4,7 +4,7 @@ import { ChecklistPage } from './pages/ChecklistPage'
 import { CreateListPage } from './pages/CreateListPage'
 import { EditListPage } from './pages/EditListPage'
 import { HomePage } from './pages/HomePage'
-import { LandingPage } from './pages/LandingPage'
+import { LandingEntry } from './pages/LandingEntry'
 
 function AppRoutes() {
   const location = useLocation()
@@ -14,7 +14,7 @@ function AppRoutes() {
     <div className={isLanding ? 'landing-shell' : 'app-shell'}>
       <div className={isLanding ? 'landing-content' : 'app-content'}>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={<LandingEntry />} />
           <Route path="/app" element={<HomePage />} />
           <Route path="/nueva" element={<CreateListPage />} />
           <Route path="/lista/:id" element={<ChecklistPage />} />

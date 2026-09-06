@@ -1,63 +1,89 @@
-import { Download, X } from 'lucide-react'
+import { Download, Share, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
-}
+import {
+  clearDeferredInstallPrompt,
+  getDeferredInstallPrompt,
+  subscribeInstallPrompt,
+} from '../utils/installPrompt'
+import { isIosDevice, isRunningAsInstalledPwa } from '../utils/pwa'
 
 const DISMISS_KEY = 'checklist-install-dismissed'
 
 export function InstallPrompt() {
-  const [event, setEvent] = useState<BeforeInstallPromptEvent | null>(null)
-  const [visible, setVisible] = useState(false)
+  const [canNativeInstall, setCanNativeInstall] = useState(
+    () => getDeferredInstallPrompt() !== null,
+  )
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof sessionStorage === 'undefined') {
+      return false
+    }
+    return sessionStorage.getItem(DISMISS_KEY) === '1'
+  })
+  const [installed, setInstalled] = useState(() => isRunningAsInstalledPwa())
 
   useEffect(() => {
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      return
+    function sync() {
+      setCanNativeInstall(getDeferredInstallPrompt() !== null)
+      setInstalled(isRunningAsInstalledPwa())
     }
 
-    if (sessionStorage.getItem(DISMISS_KEY) === '1') {
-      return
-    }
-
-    function onPrompt(rawEvent: Event) {
-      rawEvent.preventDefault()
-      const installEvent = rawEvent as BeforeInstallPromptEvent
-      setEvent(installEvent)
-      setVisible(true)
-    }
-
-    window.addEventListener('beforeinstallprompt', onPrompt)
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt)
+    sync()
+    return subscribeInstallPrompt(sync)
   }, [])
 
-  if (!visible || !event) {
+  if (installed || dismissed) {
     return null
   }
 
+  const ios = isIosDevice()
+
   async function install() {
-    await event?.prompt()
-    const choice = await event?.userChoice
-    if (choice?.outcome === 'accepted') {
-      setVisible(false)
-      setEvent(null)
+    const event = getDeferredInstallPrompt()
+    if (!event) {
+      return
+    }
+
+    await event.prompt()
+    const choice = await event.userChoice
+    clearDeferredInstallPrompt()
+
+    if (choice.outcome === 'accepted') {
+      setInstalled(true)
+    } else {
+      setCanNativeInstall(false)
     }
   }
 
   function dismiss() {
     sessionStorage.setItem(DISMISS_KEY, '1')
-    setVisible(false)
+    setDismissed(true)
   }
 
   return (
     <div className="install-banner">
-      <p>Instala CheckList para usarla sin conexión, como una aplicación.</p>
+      <div className="install-copy">
+        <p className="install-title">Instala CheckList</p>
+        {ios ? (
+          <p>
+            En Safari, pulsa <Share size={14} strokeWidth={2.2} className="install-inline-icon" aria-hidden="true" />{' '}
+            y elige <strong>Añadir a pantalla de inicio</strong>.
+          </p>
+        ) : canNativeInstall ? (
+          <p>Instálala para abrirla como una app y usarla sin conexión.</p>
+        ) : (
+          <p>
+            Desde el menú del navegador elige <strong>Instalar aplicación</strong> o{' '}
+            <strong>Añadir a la pantalla de inicio</strong>.
+          </p>
+        )}
+      </div>
       <div className="install-actions">
-        <button type="button" className="btn btn-primary" onClick={() => void install()}>
-          <Download size={18} strokeWidth={2.2} aria-hidden="true" />
-          <span>Instalar</span>
-        </button>
+        {canNativeInstall && !ios ? (
+          <button type="button" className="btn btn-primary" onClick={() => void install()}>
+            <Download size={18} strokeWidth={2.2} aria-hidden="true" />
+            <span>Instalar</span>
+          </button>
+        ) : null}
         <button type="button" className="icon-btn" aria-label="Cerrar" onClick={dismiss}>
           <X size={18} strokeWidth={2.2} />
         </button>
