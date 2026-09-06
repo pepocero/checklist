@@ -75,27 +75,6 @@ export function ChecklistPage() {
       <AppHeader
         title={list.name}
         backTo="/app"
-        actions={
-          <>
-            <Link
-              to={`/lista/${list.id}/editar`}
-              className="icon-btn"
-              aria-label="Editar lista"
-              title="Editar lista"
-            >
-              <Pencil size={18} strokeWidth={2.1} />
-            </Link>
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label="Reiniciar tarea"
-              title="Reiniciar tarea"
-              onClick={() => setConfirmReset(true)}
-            >
-              <RotateCcw size={18} strokeWidth={2.1} />
-            </button>
-          </>
-        }
       />
 
       {error ? <p className="banner error">{error}</p> : null}

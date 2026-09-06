@@ -151,7 +151,14 @@ button {
   color: var(--ink-muted);
 }
 
-.app-header-actions,
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
 .page-actions,
 .dialog-actions,
 .install-actions,
@@ -414,7 +421,7 @@ textarea:focus-visible {
 
 .edit-task-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   border-radius: 14px;
@@ -612,15 +619,27 @@ textarea:focus-visible {
     align-items: stretch;
   }
 
-  .app-header-actions,
+  .app-header-actions {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
   .install-actions {
     width: 100%;
   }
 
   .btn,
-  .app-header-actions .icon-btn,
   .install-actions .btn {
     width: 100%;
+  }
+
+  .app-header-actions .icon-btn,
+  .app-header-actions .btn {
+    width: auto;
+    flex: 0 0 auto;
   }
 
   .landing-enter-btn,
@@ -630,12 +649,18 @@ textarea:focus-visible {
   }
 
   .edit-task-row {
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 6px;
   }
 
+  .edit-task-row input {
+    min-width: 0;
+  }
+
+  .edit-task-row .drag-handle,
   .edit-task-row .icon-btn.danger {
-    grid-column: 2;
-    justify-self: end;
+    min-width: 40px;
+    min-height: 40px;
   }
 }
 
