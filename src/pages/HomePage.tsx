@@ -33,6 +33,7 @@ export function HomePage() {
       <AppHeader
         title="Mis listas"
         subtitle="CheckList · Creador de listas de verificación"
+        homeTo="/"
       />
 
       <ActionBar ariaLabel="Crear lista">

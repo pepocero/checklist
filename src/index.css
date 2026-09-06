@@ -131,6 +131,7 @@ button {
 
 .app-header-copy {
   min-width: 0;
+  flex: 1;
 }
 
 .app-header h1,
