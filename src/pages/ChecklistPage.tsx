@@ -82,6 +82,22 @@ export function ChecklistPage() {
 
       <ChecklistProgress completed={completedCount} total={totalCount} />
 
+      {tasks.length === 0 ? (
+        <div className="empty-state">
+          <p>Esta lista no tiene tareas. Añade algunas desde editar.</p>
+          <Link to={`/lista/${list.id}/editar`} className="btn btn-primary">
+            <Pencil size={18} strokeWidth={2.1} aria-hidden="true" />
+            <span>Editar lista</span>
+          </Link>
+        </div>
+      ) : (
+        <div className="checklist">
+          {tasks.map((task) => (
+            <ChecklistItem key={task.id} task={task} onToggle={toggleTask} />
+          ))}
+        </div>
+      )}
+
       {tasks.length > 0 ? (
         <ActionBar ariaLabel="Acciones de la lista">
           <Link to={`/lista/${list.id}/editar`} className="btn btn-edit">
@@ -98,22 +114,6 @@ export function ChecklistPage() {
           </button>
         </ActionBar>
       ) : null}
-
-      {tasks.length === 0 ? (
-        <div className="empty-state">
-          <p>Esta lista no tiene tareas. Añade algunas desde editar.</p>
-          <Link to={`/lista/${list.id}/editar`} className="btn btn-primary">
-            <Pencil size={18} strokeWidth={2.1} aria-hidden="true" />
-            <span>Editar lista</span>
-          </Link>
-        </div>
-      ) : (
-        <div className="checklist">
-          {tasks.map((task) => (
-            <ChecklistItem key={task.id} task={task} onToggle={toggleTask} />
-          ))}
-        </div>
-      )}
 
       <CompletionDialog
         open={showCompletion && !confirmReset}
