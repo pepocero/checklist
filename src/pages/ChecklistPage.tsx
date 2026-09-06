@@ -50,10 +50,10 @@ export function ChecklistPage() {
   if (isReady && notFound) {
     return (
       <section className="page">
-        <AppHeader title="Lista no encontrada" backTo="/" />
+        <AppHeader title="Lista no encontrada" backTo="/app" />
         <div className="empty-state">
           <p>Esta lista no existe o fue eliminada.</p>
-          <Link to="/" className="btn btn-primary">
+          <Link to="/app" className="btn btn-primary">
             <ArrowLeft size={18} strokeWidth={2.2} aria-hidden="true" />
             <span>Volver a mis listas</span>
           </Link>
@@ -65,7 +65,7 @@ export function ChecklistPage() {
   if (!list) {
     return (
       <section className="page">
-        <AppHeader title="Checklist" backTo="/" />
+        <AppHeader title="CheckList" backTo="/app" />
       </section>
     )
   }
@@ -74,7 +74,7 @@ export function ChecklistPage() {
     <section className="page">
       <AppHeader
         title={list.name}
-        backTo="/"
+        backTo="/app"
         actions={
           <>
             <Link
@@ -140,7 +140,7 @@ export function ChecklistPage() {
         totalTasks={totalCount}
         onReset={() => setConfirmReset(true)}
         onGoHome={() => {
-          void navigate('/')
+                void navigate('/app')
         }}
         onClose={() => setShowCompletion(false)}
       />

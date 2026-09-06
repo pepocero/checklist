@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { TaskListSummary } from '../types'
@@ -23,6 +23,11 @@ export function ListCard({ list, onDelete }: ListCardProps) {
     }
   }
 
+  function handleEdit(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation()
+    void navigate(`/lista/${list.id}/editar`)
+  }
+
   function handleDelete(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation()
     onDelete(list)
@@ -39,15 +44,26 @@ export function ListCard({ list, onDelete }: ListCardProps) {
     >
       <div className="list-card-top">
         <h2>{list.name}</h2>
-        <button
-          type="button"
-          className="icon-btn danger"
-          aria-label={`Eliminar ${list.name}`}
-          title="Eliminar lista"
-          onClick={handleDelete}
-        >
-          <Trash2 size={18} strokeWidth={2.1} />
-        </button>
+        <div className="list-card-actions">
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={`Editar ${list.name}`}
+            title="Editar lista"
+            onClick={handleEdit}
+          >
+            <Pencil size={18} strokeWidth={2.1} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn danger"
+            aria-label={`Eliminar ${list.name}`}
+            title="Eliminar lista"
+            onClick={handleDelete}
+          >
+            <Trash2 size={18} strokeWidth={2.1} />
+          </button>
+        </div>
       </div>
       <ChecklistProgress
         completed={list.completedTasks}

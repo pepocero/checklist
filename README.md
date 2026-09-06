@@ -1,8 +1,8 @@
-# Checklist de Tareas
+# CheckList
 
-Aplicación web instalable (**PWA**) para crear y reutilizar listas de tareas o checklists.
+**Creador de listas de verificación**
 
-Pensada para trabajos repetitivos: por ejemplo, preparar y configurar ordenadores nuevos. Creas la lista una vez, la marcas mientras trabajas y, al terminar, la reinicias para el siguiente equipo.
+Aplicación web instalable (**PWA**) para crear y reutilizar checklists. Ideal para tareas repetitivas, preparar maletas, comprobar todo al salir de casa o cualquier rutina que no quieras dejar a medias.
 
 Creada por [CarliniTools](https://carlinitools.com).
 
@@ -15,35 +15,33 @@ Creada por [CarliniTools](https://carlinitools.com).
 - **Guardado automático** en el dispositivo (IndexedDB)
 - **Reiniciar lista**: desmarca todas las tareas y mantiene el contenido para reutilizarla
 - **Editar listas**: nombre, añadir/editar/eliminar tareas y reordenar con drag & drop
+- **Copiar y compartir** listas en texto plano
 - **Eliminar listas** con confirmación
 - **Aviso al completar** todas las tareas
 - **Funciona sin conexión** tras instalarla
-- **Sin cuentas ni servidor**: no requiere registro, backend, Supabase ni Firebase
+- **Sin cuentas ni servidor**: no requiere registro ni backend
 
 ---
 
 ## Cómo usarla
 
-1. Pulsa **Nueva lista**
-2. Escribe un nombre (por ejemplo: *Configuración ordenador nuevo*)
-3. Pega o escribe las tareas, **una por línea**
-4. Guarda y ve marcando cada ítem mientras trabajas
+1. Entra en la app desde la página de bienvenida
+2. Pulsa **Nueva lista**
+3. Escribe un nombre y pega las tareas, **una por línea**
+4. Ve marcando cada ítem mientras trabajas
 5. Al completar todo, reinicia la lista o vuelve a tus listas
 
-### Ejemplo de tareas
+---
 
-```text
-Outlook
-Teams
-Probar la cámara
-Authenticator
-OneDrive
-Red ethernet
-Wifi
-VPN
-Impresora
-Escáner
-```
+## Rutas
+
+| Ruta | Contenido |
+|---|---|
+| `/` | Página de bienvenida |
+| `/app` | Mis listas |
+| `/nueva` | Crear lista |
+| `/lista/:id` | Checklist |
+| `/lista/:id/editar` | Editar lista |
 
 ---
 
@@ -67,8 +65,6 @@ npm install
 npm run dev
 ```
 
-Abrirá la app en el navegador (por defecto `http://localhost:5173`).
-
 ### Build de producción
 
 ```bash
@@ -88,26 +84,13 @@ La salida queda en `dist/`.
 | Output directory | `dist` |
 | Root directory | `/` (vacío) |
 
-No uses `npm run dev` ni Wrangler para este proyecto: es una app estática generada por Vite.
-
-Para que las rutas SPA (`/lista/...`) funcionen al recargar, configura un rewrite a `index.html` (código `200`).
-
----
-
-## Instalar como aplicación
-
-Tras abrirla al menos una vez en un navegador compatible:
-
-- **Windows (Edge/Chrome)**: instalar desde el icono de la barra de direcciones o el aviso de la propia app
-- **Android**: *Añadir a la pantalla de inicio*
-
-Después podrás abrirla sin Internet; los datos siguen en el dispositivo.
+Para que las rutas SPA funcionen al recargar, configura un rewrite a `index.html` (código `200`).
 
 ---
 
 ## Privacidad
 
-Todos los datos se guardan **solo en el navegador/dispositivo** del usuario. No hay sincronización en la nube ni envío de información a un servidor de la aplicación.
+Todos los datos se guardan **solo en el navegador/dispositivo** del usuario.
 
 ---
 

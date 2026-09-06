@@ -31,7 +31,7 @@ export function HomePage() {
     <section className="page">
       <AppHeader
         title="Mis listas"
-        subtitle="Listas reutilizables guardadas en este dispositivo"
+        subtitle="CheckList · Creador de listas de verificación"
         actions={
           <Link to="/nueva" className="btn btn-primary">
             <Plus size={20} strokeWidth={2.3} aria-hidden="true" />

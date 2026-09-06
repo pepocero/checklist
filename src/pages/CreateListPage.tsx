@@ -37,7 +37,7 @@ export function CreateListPage() {
       <AppHeader
         title="Crear lista"
         subtitle="Cada línea del texto se convertirá en una tarea"
-        backTo="/"
+        backTo="/app"
       />
 
       <form className="stack-form" onSubmit={(event) => void handleSubmit(event)}>

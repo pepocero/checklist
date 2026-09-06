@@ -52,7 +52,7 @@ export function InstallPrompt() {
 
   return (
     <div className="install-banner">
-      <p>Instala Checklist de Tareas para usarla sin conexión, como una aplicación.</p>
+      <p>Instala CheckList para usarla sin conexión, como una aplicación.</p>
       <div className="install-actions">
         <button type="button" className="btn btn-primary" onClick={() => void install()}>
           <Download size={18} strokeWidth={2.2} aria-hidden="true" />

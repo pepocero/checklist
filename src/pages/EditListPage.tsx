@@ -14,7 +14,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { Plus, Trash2 } from 'lucide-react'
+import { Check, Copy, Plus, Share2, Trash2 } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
@@ -33,6 +33,11 @@ import {
 } from '../services/database'
 import type { Task, TaskList } from '../types'
 import { parseTaskLines } from '../utils/parseTasks'
+import {
+  copyTextToClipboard,
+  formatListAsPlainText,
+  shareListText,
+} from '../utils/shareList'
 
 export function EditListPage() {
   const { id } = useParams()
@@ -49,6 +54,7 @@ export function EditListPage() {
   const [pendingDeleteList, setPendingDeleteList] = useState(false)
   const [pendingDeleteTask, setPendingDeleteTask] = useState<Task | null>(null)
   const [busy, setBusy] = useState(false)
+  const [copyFeedback, setCopyFeedback] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -232,17 +238,42 @@ export function EditListPage() {
     setBusy(true)
     try {
       await deleteList(list.id)
-      void navigate('/', { replace: true })
+      void navigate('/app', { replace: true })
     } catch (cause) {
       showError(cause, 'No se pudo eliminar la lista.')
       setBusy(false)
     }
   }
 
+  async function handleCopyList() {
+    try {
+      await copyTextToClipboard(formatListAsPlainText(tasks))
+      setError(null)
+      setCopyFeedback(true)
+      window.setTimeout(() => setCopyFeedback(false), 1800)
+    } catch (cause) {
+      showError(cause, 'No se pudo copiar la lista.')
+    }
+  }
+
+  async function handleShareList() {
+    try {
+      const result = await shareListText(formatListAsPlainText(tasks), name)
+      setError(null)
+
+      if (result === 'copied') {
+        setCopyFeedback(true)
+        window.setTimeout(() => setCopyFeedback(false), 1800)
+      }
+    } catch (cause) {
+      showError(cause, 'No se pudo compartir la lista.')
+    }
+  }
+
   if (isReady && (notFound || !list)) {
     return (
       <section className="page">
-        <AppHeader title="Lista no encontrada" backTo="/" />
+        <AppHeader title="Lista no encontrada" backTo="/app" />
       </section>
     )
   }
@@ -250,7 +281,7 @@ export function EditListPage() {
   if (!list) {
     return (
       <section className="page">
-        <AppHeader title="Editar lista" backTo="/" />
+        <AppHeader title="Editar lista" backTo="/app" />
       </section>
     )
   }
@@ -262,15 +293,43 @@ export function EditListPage() {
         subtitle="Los cambios se guardan automáticamente"
         backTo={`/lista/${list.id}`}
         actions={
-          <button
-            type="button"
-            className="icon-btn danger"
-            aria-label="Eliminar lista"
-            title="Eliminar lista"
-            onClick={() => setPendingDeleteList(true)}
-          >
-            <Trash2 size={18} strokeWidth={2.1} />
-          </button>
+          <>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Copiar lista en texto"
+              title="Copiar lista en texto"
+              onClick={() => {
+                void handleCopyList()
+              }}
+            >
+              {copyFeedback ? (
+                <Check size={18} strokeWidth={2.1} />
+              ) : (
+                <Copy size={18} strokeWidth={2.1} />
+              )}
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Compartir lista"
+              title="Compartir lista"
+              onClick={() => {
+                void handleShareList()
+              }}
+            >
+              <Share2 size={18} strokeWidth={2.1} />
+            </button>
+            <button
+              type="button"
+              className="icon-btn danger"
+              aria-label="Eliminar lista"
+              title="Eliminar lista"
+              onClick={() => setPendingDeleteList(true)}
+            >
+              <Trash2 size={18} strokeWidth={2.1} />
+            </button>
+          </>
         }
       />
 
