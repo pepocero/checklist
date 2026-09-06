@@ -14,7 +14,8 @@ interface SortableTaskRowProps {
   closeSwipeSignal?: number
   onDraftChange: (taskId: string, text: string) => void
   onBlur: (task: Task, text: string) => void
-  onDelete: (task: Task) => void
+  onRevealChange: (taskId: string, revealed: boolean) => void
+  onRequestDelete: (taskId: string) => void
 }
 
 export function SortableTaskRow({
@@ -23,7 +24,8 @@ export function SortableTaskRow({
   closeSwipeSignal = 0,
   onDraftChange,
   onBlur,
-  onDelete,
+  onRevealChange,
+  onRequestDelete,
 }: SortableTaskRowProps) {
   const {
     attributes,
@@ -38,11 +40,25 @@ export function SortableTaskRow({
   const [offset, setOffset] = useState(0)
   const [isSwiping, setIsSwiping] = useState(false)
   const offsetRef = useRef(0)
+  const revealedRef = useRef(false)
+  const onRevealChangeRef = useRef(onRevealChange)
   const pointerIdRef = useRef<number | null>(null)
   const startXRef = useRef(0)
   const startYRef = useRef(0)
   const originOffsetRef = useRef(0)
   const axisRef = useRef<'none' | 'horizontal' | 'vertical'>('none')
+
+  onRevealChangeRef.current = onRevealChange
+
+  function setRevealOffset(next: number) {
+    setOffset(next)
+    offsetRef.current = next
+    const revealed = next < 0
+    if (revealedRef.current !== revealed) {
+      revealedRef.current = revealed
+      onRevealChangeRef.current(task.id, revealed)
+    }
+  }
 
   useEffect(() => {
     offsetRef.current = offset
@@ -50,21 +66,29 @@ export function SortableTaskRow({
 
   useEffect(() => {
     if (closeSwipeSignal > 0) {
-      setOffset(0)
       setIsSwiping(false)
       pointerIdRef.current = null
       axisRef.current = 'none'
+      setRevealOffset(0)
     }
   }, [closeSwipeSignal])
 
   useEffect(() => {
     if (isDragging) {
-      setOffset(0)
       setIsSwiping(false)
       pointerIdRef.current = null
       axisRef.current = 'none'
+      setRevealOffset(0)
     }
   }, [isDragging])
+
+  useEffect(() => {
+    return () => {
+      if (revealedRef.current) {
+        onRevealChangeRef.current(task.id, false)
+      }
+    }
+  }, [task.id])
 
   function clampOffset(value: number) {
     return Math.min(0, Math.max(-DELETE_WIDTH, value))
@@ -112,7 +136,9 @@ export function SortableTaskRow({
     }
 
     event.preventDefault()
-    setOffset(clampOffset(originOffsetRef.current + deltaX))
+    const next = clampOffset(originOffsetRef.current + deltaX)
+    setOffset(next)
+    offsetRef.current = next
   }
 
   function finishSwipe(pointerId: number, target: HTMLDivElement) {
@@ -134,7 +160,7 @@ export function SortableTaskRow({
 
     axisRef.current = 'none'
     const next = offsetRef.current <= -OPEN_THRESHOLD ? -DELETE_WIDTH : 0
-    setOffset(next)
+    setRevealOffset(next)
   }
 
   function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
@@ -174,7 +200,7 @@ export function SortableTaskRow({
           className="edit-task-delete"
           aria-label="Eliminar tarea"
           tabIndex={offset < 0 ? 0 : -1}
-          onClick={() => onDelete(task)}
+          onClick={() => onRequestDelete(task.id)}
         >
           <Trash2 size={18} strokeWidth={2.1} aria-hidden="true" />
         </button>
@@ -194,7 +220,7 @@ export function SortableTaskRow({
             onChange={(event) => onDraftChange(task.id, event.target.value)}
             onFocus={() => {
               if (offsetRef.current !== 0) {
-                setOffset(0)
+                setRevealOffset(0)
               }
             }}
             onBlur={(event) => onBlur(task, event.target.value)}

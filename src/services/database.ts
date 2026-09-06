@@ -355,31 +355,49 @@ export async function addTasksToList(listId: string, taskTexts: string[]): Promi
 }
 
 export async function deleteTask(taskId: string): Promise<void> {
+  await deleteTasks([taskId])
+}
+
+export async function deleteTasks(taskIds: string[]): Promise<void> {
+  const uniqueIds = [...new Set(taskIds.filter((taskId) => taskId.length > 0))]
+
+  if (uniqueIds.length === 0) {
+    return
+  }
+
   try {
     const db = await getDatabase()
     const tx = db.transaction(['lists', 'tasks'], 'readwrite')
     const taskStore = tx.objectStore('tasks')
-    const current = await taskStore.get(taskId)
+    const listStore = tx.objectStore('lists')
 
-    if (!current) {
-      await tx.done
-      return
+    const affectedListIds = new Set<string>()
+
+    for (const taskId of uniqueIds) {
+      const current = await taskStore.get(taskId)
+      if (!current) {
+        continue
+      }
+
+      affectedListIds.add(current.listId)
+      await taskStore.delete(taskId)
     }
 
-    await taskStore.delete(taskId)
-
-    const remaining = await getTasksInTransaction(current.listId, taskStore)
     const updatedAt = now()
 
-    for (const [index, task] of remaining.entries()) {
-      if (task.order !== index) {
-        await taskStore.put({ ...task, order: index, updatedAt })
-      }
-    }
+    for (const listId of affectedListIds) {
+      const remaining = await getTasksInTransaction(listId, taskStore)
 
-    const list = await tx.objectStore('lists').get(current.listId)
-    if (list) {
-      await tx.objectStore('lists').put({ ...list, updatedAt })
+      for (const [index, task] of remaining.entries()) {
+        if (task.order !== index) {
+          await taskStore.put({ ...task, order: index, updatedAt })
+        }
+      }
+
+      const list = await listStore.get(listId)
+      if (list) {
+        await listStore.put({ ...list, updatedAt })
+      }
     }
 
     await tx.done
@@ -388,7 +406,12 @@ export async function deleteTask(taskId: string): Promise<void> {
       throw cause
     }
 
-    throw new DatabaseError('No se pudo eliminar la tarea.', { cause })
+    throw new DatabaseError(
+      uniqueIds.length > 1
+        ? 'No se pudieron eliminar las tareas.'
+        : 'No se pudo eliminar la tarea.',
+      { cause },
+    )
   }
 }
 

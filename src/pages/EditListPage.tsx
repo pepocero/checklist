@@ -15,7 +15,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { Check, Copy, Plus, Share2, Trash2 } from 'lucide-react'
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ActionBar } from '../components/ActionBar'
 import { AppHeader } from '../components/AppHeader'
@@ -25,7 +25,7 @@ import {
   DatabaseError,
   addTasksToList,
   deleteList,
-  deleteTask,
+  deleteTasks,
   getListById,
   getTasksByListId,
   reorderTasks,
@@ -53,10 +53,16 @@ export function EditListPage() {
   const [isReady, setIsReady] = useState(false)
   const [notFound, setNotFound] = useState(false)
   const [pendingDeleteList, setPendingDeleteList] = useState(false)
-  const [pendingDeleteTask, setPendingDeleteTask] = useState<Task | null>(null)
+  const [pendingDeleteTaskIds, setPendingDeleteTaskIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState(false)
   const [swipeCloseSignals, setSwipeCloseSignals] = useState<Record<string, number>>({})
+  const [revealedTaskIds, setRevealedTaskIds] = useState<string[]>([])
+  const revealedTaskIdsRef = useRef<string[]>([])
+
+  useEffect(() => {
+    revealedTaskIdsRef.current = revealedTaskIds
+  }, [revealedTaskIds])
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -214,19 +220,54 @@ export function EditListPage() {
     }
   }
 
-  async function confirmDeleteTask() {
-    if (!pendingDeleteTask) {
+  const handleRevealChange = useCallback((taskId: string, revealed: boolean) => {
+    setRevealedTaskIds((current) => {
+      if (revealed) {
+        return current.includes(taskId) ? current : [...current, taskId]
+      }
+      return current.filter((id) => id !== taskId)
+    })
+  }, [])
+
+  function handleRequestDelete(taskId: string) {
+    const current = revealedTaskIdsRef.current
+    const selected = current.includes(taskId) ? current : [...current, taskId]
+    setPendingDeleteTaskIds([...new Set(selected)])
+  }
+
+  function closeSwipes(taskIds: string[]) {
+    setSwipeCloseSignals((current) => {
+      const next = { ...current }
+      for (const id of taskIds) {
+        next[id] = (next[id] ?? 0) + 1
+      }
+      return next
+    })
+    setRevealedTaskIds((current) => current.filter((id) => !taskIds.includes(id)))
+  }
+
+  async function confirmDeleteTasks() {
+    if (pendingDeleteTaskIds.length === 0) {
       return
     }
 
+    const idsToDelete = pendingDeleteTaskIds
     setBusy(true)
     try {
-      await deleteTask(pendingDeleteTask.id)
-      setTasks((current) => current.filter((task) => task.id !== pendingDeleteTask.id))
-      setPendingDeleteTask(null)
+      await deleteTasks(idsToDelete)
+      setTasks((current) => current.filter((task) => !idsToDelete.includes(task.id)))
+      setDrafts((current) => {
+        const next = { ...current }
+        for (const taskId of idsToDelete) {
+          delete next[taskId]
+        }
+        return next
+      })
+      setPendingDeleteTaskIds([])
+      setRevealedTaskIds((current) => current.filter((id) => !idsToDelete.includes(id)))
       setError(null)
     } catch (cause) {
-      showError(cause, 'No se pudo eliminar la tarea.')
+      showError(cause, 'No se pudieron eliminar las tareas.')
     } finally {
       setBusy(false)
     }
@@ -378,7 +419,8 @@ export function EditListPage() {
                 onBlur={(currentTask, text) => {
                   void handleTaskBlur(currentTask, text)
                 }}
-                onDelete={setPendingDeleteTask}
+                onRevealChange={handleRevealChange}
+                onRequestDelete={handleRequestDelete}
               />
             ))}
           </div>
@@ -417,23 +459,31 @@ export function EditListPage() {
       </form>
 
       <ConfirmDialog
-        open={pendingDeleteTask !== null}
-        title="Eliminar tarea"
-        message="La tarea se eliminará de esta lista. El resto de elementos y su progreso se mantendrán."
-        confirmLabel={busy ? 'Eliminando…' : 'Eliminar tarea'}
+        open={pendingDeleteTaskIds.length > 0}
+        title={
+          pendingDeleteTaskIds.length > 1
+            ? `Eliminar ${pendingDeleteTaskIds.length} tareas`
+            : 'Eliminar tarea'
+        }
+        message={
+          pendingDeleteTaskIds.length > 1
+            ? 'Se eliminarán todas las tareas que tienes deslizadas. El resto de elementos y su progreso se mantendrán.'
+            : 'La tarea se eliminará de esta lista. El resto de elementos y su progreso se mantendrán.'
+        }
+        confirmLabel={
+          busy
+            ? 'Eliminando…'
+            : pendingDeleteTaskIds.length > 1
+              ? `Eliminar ${pendingDeleteTaskIds.length}`
+              : 'Eliminar tarea'
+        }
         danger
         onCancel={() => {
-          if (pendingDeleteTask) {
-            const taskId = pendingDeleteTask.id
-            setSwipeCloseSignals((current) => ({
-              ...current,
-              [taskId]: (current[taskId] ?? 0) + 1,
-            }))
-          }
-          setPendingDeleteTask(null)
+          closeSwipes(pendingDeleteTaskIds)
+          setPendingDeleteTaskIds([])
         }}
         onConfirm={() => {
-          void confirmDeleteTask()
+          void confirmDeleteTasks()
         }}
       />
 
