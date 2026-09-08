@@ -3,13 +3,13 @@ import type { Task, TaskList, TaskListSummary } from '../types'
 import { normalizeTaskText } from '../utils/parseTasks'
 
 const DB_NAME = 'checklist-de-tareas'
-const DB_VERSION = 1
+const DB_VERSION = 3
 
 interface ChecklistSchema extends DBSchema {
   lists: {
     key: string
     value: TaskList
-    indexes: { 'by-updatedAt': number }
+    indexes: { 'by-updatedAt': number; 'by-order': number }
   }
   tasks: {
     key: string
@@ -38,10 +38,16 @@ function now(): number {
 export function getDatabase(): Promise<IDBPDatabase<ChecklistSchema>> {
   if (!dbPromise) {
     dbPromise = openDB<ChecklistSchema>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, oldVersion, _newVersion, transaction) {
         if (!db.objectStoreNames.contains('lists')) {
           const lists = db.createObjectStore('lists', { keyPath: 'id' })
           lists.createIndex('by-updatedAt', 'updatedAt')
+          lists.createIndex('by-order', 'order')
+        } else if (oldVersion < 2) {
+          const lists = transaction.objectStore('lists')
+          if (!lists.indexNames.contains('by-order')) {
+            lists.createIndex('by-order', 'order')
+          }
         }
 
         if (!db.objectStoreNames.contains('tasks')) {
@@ -49,13 +55,72 @@ export function getDatabase(): Promise<IDBPDatabase<ChecklistSchema>> {
           tasks.createIndex('by-listId', 'listId')
         }
       },
-    }).catch((cause: unknown) => {
-      dbPromise = null
-      throw new DatabaseError('No se pudo abrir la base de datos local.', { cause })
     })
+      .then(async (db) => {
+        await ensureListOrders(db)
+        await ensureTaskNotes(db)
+        return db
+      })
+      .catch((cause: unknown) => {
+        dbPromise = null
+        throw new DatabaseError('No se pudo abrir la base de datos local.', { cause })
+      })
   }
 
   return dbPromise
+}
+
+function sortLists<T extends TaskList>(lists: T[]): T[] {
+  return [...lists].sort((a, b) => {
+    const orderA = typeof a.order === 'number' ? a.order : Number.MAX_SAFE_INTEGER
+    const orderB = typeof b.order === 'number' ? b.order : Number.MAX_SAFE_INTEGER
+
+    if (orderA !== orderB) {
+      return orderA - orderB
+    }
+
+    return b.updatedAt - a.updatedAt
+  })
+}
+
+async function ensureListOrders(db: IDBPDatabase<ChecklistSchema>): Promise<void> {
+  const tx = db.transaction('lists', 'readwrite')
+  const lists = await tx.store.getAll()
+  const needsMigration = lists.some((list) => typeof list.order !== 'number')
+
+  if (!needsMigration) {
+    await tx.done
+    return
+  }
+
+  const sorted = [...lists].sort((a, b) => b.updatedAt - a.updatedAt)
+
+  for (const [index, list] of sorted.entries()) {
+    await tx.store.put({ ...list, order: index })
+  }
+
+  await tx.done
+}
+
+async function ensureTaskNotes(db: IDBPDatabase<ChecklistSchema>): Promise<void> {
+  const tx = db.transaction('tasks', 'readwrite')
+  const tasks = await tx.store.getAll()
+  const needsMigration = tasks.some((task) => typeof task.note !== 'string')
+
+  if (!needsMigration) {
+    await tx.done
+    return
+  }
+
+  for (const task of tasks) {
+    if (typeof task.note === 'string') {
+      continue
+    }
+
+    await tx.store.put({ ...task, note: '' })
+  }
+
+  await tx.done
 }
 
 function sortTasks(tasks: Task[]): Task[] {
@@ -107,16 +172,17 @@ export async function getAllListSummaries(): Promise<TaskListSummary[]> {
       totals.set(task.listId, current)
     }
 
-    return lists
-      .map((list) => {
+    return sortLists(
+      lists.map((list) => {
         const stats = totals.get(list.id) ?? { total: 0, completed: 0 }
         return {
           ...list,
+          order: typeof list.order === 'number' ? list.order : 0,
           totalTasks: stats.total,
           completedTasks: stats.completed,
         }
-      })
-      .sort((a, b) => b.updatedAt - a.updatedAt)
+      }),
+    )
   } catch (cause) {
     if (cause instanceof DatabaseError) {
       throw cause
@@ -165,17 +231,24 @@ export async function createListWithTasks(
   }
 
   const createdAt = now()
-  const list: TaskList = {
-    id: createId(),
-    name: listName,
-    createdAt,
-    updatedAt: createdAt,
-  }
 
   try {
     const db = await getDatabase()
     const tx = db.transaction(['lists', 'tasks'], 'readwrite')
-    await tx.objectStore('lists').add(list)
+    const listStore = tx.objectStore('lists')
+    const existing = await listStore.getAll()
+    const nextOrder =
+      existing.reduce((max, list) => Math.max(max, list.order ?? -1), -1) + 1
+
+    const list: TaskList = {
+      id: createId(),
+      name: listName,
+      order: nextOrder,
+      createdAt,
+      updatedAt: createdAt,
+    }
+
+    await listStore.add(list)
 
     const taskStore = tx.objectStore('tasks')
     for (const [index, text] of texts.entries()) {
@@ -183,6 +256,7 @@ export async function createListWithTasks(
         id: createId(),
         listId: list.id,
         text,
+        note: '',
         completed: false,
         order: index,
         createdAt,
@@ -308,6 +382,43 @@ export async function updateTaskText(taskId: string, text: string): Promise<Task
   }
 }
 
+export async function updateTaskNote(taskId: string, note: string): Promise<Task> {
+  const normalized = note.replace(/\r\n/g, '\n').trim()
+
+  try {
+    const db = await getDatabase()
+    const tx = db.transaction(['tasks', 'lists'], 'readwrite')
+    const taskStore = tx.objectStore('tasks')
+    const current = await taskStore.get(taskId)
+
+    if (!current) {
+      throw new DatabaseError('La tarea no existe.')
+    }
+
+    const updatedAt = now()
+    const updated: Task = {
+      ...current,
+      note: normalized,
+      updatedAt,
+    }
+    await taskStore.put(updated)
+
+    const list = await tx.objectStore('lists').get(current.listId)
+    if (list) {
+      await tx.objectStore('lists').put({ ...list, updatedAt })
+    }
+
+    await tx.done
+    return updated
+  } catch (cause) {
+    if (cause instanceof DatabaseError) {
+      throw cause
+    }
+
+    throw new DatabaseError('No se pudo guardar la nota.', { cause })
+  }
+}
+
 export async function addTasksToList(listId: string, taskTexts: string[]): Promise<Task[]> {
   const texts = taskTexts.map(normalizeTaskText).filter((text) => text.length > 0)
 
@@ -332,6 +443,7 @@ export async function addTasksToList(listId: string, taskTexts: string[]): Promi
       id: createId(),
       listId,
       text,
+      note: '',
       completed: false,
       order: existing.length + index,
       createdAt,
@@ -412,6 +524,45 @@ export async function deleteTasks(taskIds: string[]): Promise<void> {
         : 'No se pudo eliminar la tarea.',
       { cause },
     )
+  }
+}
+
+export async function reorderLists(orderedListIds: string[]): Promise<TaskList[]> {
+  try {
+    const db = await getDatabase()
+    const tx = db.transaction('lists', 'readwrite')
+    const lists = await tx.store.getAll()
+    const byId = new Map(lists.map((list) => [list.id, list]))
+
+    if (
+      orderedListIds.length !== lists.length ||
+      orderedListIds.some((listId) => !byId.has(listId))
+    ) {
+      throw new DatabaseError('El orden de las listas no es válido.')
+    }
+
+    const updatedAt = now()
+    const normalized = orderedListIds.map((listId, order) => {
+      const list = byId.get(listId)
+      if (!list) {
+        throw new DatabaseError('El orden de las listas no es válido.')
+      }
+
+      return { ...list, order, updatedAt }
+    })
+
+    for (const list of normalized) {
+      await tx.store.put(list)
+    }
+
+    await tx.done
+    return normalized
+  } catch (cause) {
+    if (cause instanceof DatabaseError) {
+      throw cause
+    }
+
+    throw new DatabaseError('No se pudo reordenar las listas.', { cause })
   }
 }
 

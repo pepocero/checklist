@@ -1,8 +1,9 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Trash2 } from 'lucide-react'
+import { GripVertical, StickyNote, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Task } from '../types'
+import { taskHasNote } from '../utils/taskNote'
 
 const DELETE_WIDTH = 76
 const OPEN_THRESHOLD = 40
@@ -16,6 +17,7 @@ interface SortableTaskRowProps {
   onBlur: (task: Task, text: string) => void
   onRevealChange: (taskId: string, revealed: boolean) => void
   onRequestDelete: (taskId: string) => void
+  onEditNote: (task: Task) => void
 }
 
 export function SortableTaskRow({
@@ -26,6 +28,7 @@ export function SortableTaskRow({
   onBlur,
   onRevealChange,
   onRequestDelete,
+  onEditNote,
 }: SortableTaskRowProps) {
   const {
     attributes,
@@ -47,6 +50,7 @@ export function SortableTaskRow({
   const startYRef = useRef(0)
   const originOffsetRef = useRef(0)
   const axisRef = useRef<'none' | 'horizontal' | 'vertical'>('none')
+  const hasNote = taskHasNote(task.note)
 
   onRevealChangeRef.current = onRevealChange
 
@@ -96,6 +100,11 @@ export function SortableTaskRow({
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (isDragging || event.button !== 0) {
+      return
+    }
+
+    const target = event.target
+    if (target instanceof HTMLElement && target.closest('button, input, textarea')) {
       return
     }
 
@@ -230,6 +239,15 @@ export function SortableTaskRow({
               }
             }}
           />
+          <button
+            type="button"
+            className={`note-btn ${hasNote ? 'has-note' : ''}`}
+            aria-label={hasNote ? 'Editar nota' : 'Añadir nota'}
+            title={hasNote ? 'Editar nota' : 'Añadir nota'}
+            onClick={() => onEditNote(task)}
+          >
+            <StickyNote size={18} strokeWidth={2.1} aria-hidden="true" />
+          </button>
         </div>
       </div>
     </div>

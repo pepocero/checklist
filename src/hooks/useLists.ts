@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
-import { deleteList as deleteListFromDb, getAllListSummaries } from '../services/database'
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import {
+  deleteList as deleteListFromDb,
+  getAllListSummaries,
+  reorderLists as reorderListsInDb,
+} from '../services/database'
 import type { TaskListSummary } from '../types'
 
 interface UseListsResult {
   lists: TaskListSummary[]
+  setLists: Dispatch<SetStateAction<TaskListSummary[]>>
   isReady: boolean
   error: string | null
   refresh: () => Promise<void>
   deleteList: (listId: string) => Promise<void>
+  reorderLists: (orderedListIds: string[]) => Promise<void>
 }
 
 export function useLists(): UseListsResult {
@@ -47,11 +53,35 @@ export function useLists(): UseListsResult {
     }
   }, [lists])
 
+  const reorderLists = useCallback(async (orderedListIds: string[]) => {
+    try {
+      const normalized = await reorderListsInDb(orderedListIds)
+      setLists((current) => {
+        const byId = new Map(current.map((list) => [list.id, list]))
+        return normalized.map((list) => {
+          const summary = byId.get(list.id)
+          return {
+            ...list,
+            totalTasks: summary?.totalTasks ?? 0,
+            completedTasks: summary?.completedTasks ?? 0,
+          }
+        })
+      })
+      setError(null)
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'No se pudo reordenar las listas.'
+      setError(message)
+      throw cause
+    }
+  }, [])
+
   return {
     lists,
+    setLists,
     isReady,
     error,
     refresh,
     deleteList,
+    reorderLists,
   }
 }

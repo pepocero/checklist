@@ -20,6 +20,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ActionBar } from '../components/ActionBar'
 import { AppHeader } from '../components/AppHeader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { NoteDialog } from '../components/NoteDialog'
 import { SortableTaskRow } from '../components/SortableTaskRow'
 import {
   DatabaseError,
@@ -30,6 +31,7 @@ import {
   getTasksByListId,
   reorderTasks,
   updateListName,
+  updateTaskNote,
   updateTaskText,
 } from '../services/database'
 import type { Task, TaskList } from '../types'
@@ -39,6 +41,7 @@ import {
   formatListAsPlainText,
   shareListText,
 } from '../utils/shareList'
+import { getTaskNote } from '../utils/taskNote'
 
 export function EditListPage() {
   const { id } = useParams()
@@ -58,6 +61,8 @@ export function EditListPage() {
   const [copyFeedback, setCopyFeedback] = useState(false)
   const [swipeCloseSignals, setSwipeCloseSignals] = useState<Record<string, number>>({})
   const [revealedTaskIds, setRevealedTaskIds] = useState<string[]>([])
+  const [noteTask, setNoteTask] = useState<Task | null>(null)
+  const [noteBusy, setNoteBusy] = useState(false)
   const revealedTaskIdsRef = useRef<string[]>([])
 
   useEffect(() => {
@@ -313,6 +318,24 @@ export function EditListPage() {
     }
   }
 
+  async function handleSaveNote(note: string) {
+    if (!noteTask) {
+      return
+    }
+
+    setNoteBusy(true)
+    try {
+      const updated = await updateTaskNote(noteTask.id, note)
+      setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      setNoteTask(null)
+      setError(null)
+    } catch (cause) {
+      showError(cause, 'No se pudo guardar la nota.')
+    } finally {
+      setNoteBusy(false)
+    }
+  }
+
   if (isReady && (notFound || !list)) {
     return (
       <section className="page">
@@ -421,6 +444,7 @@ export function EditListPage() {
                 }}
                 onRevealChange={handleRevealChange}
                 onRequestDelete={handleRequestDelete}
+                onEditNote={setNoteTask}
               />
             ))}
           </div>
@@ -457,6 +481,22 @@ export function EditListPage() {
           <span>Añadir líneas</span>
         </button>
       </form>
+
+      <NoteDialog
+        open={noteTask !== null}
+        taskText={noteTask?.text ?? ''}
+        note={getTaskNote(noteTask?.note)}
+        mode="edit"
+        busy={noteBusy}
+        onClose={() => {
+          if (!noteBusy) {
+            setNoteTask(null)
+          }
+        }}
+        onSave={(note) => {
+          void handleSaveNote(note)
+        }}
+      />
 
       <ConfirmDialog
         open={pendingDeleteTaskIds.length > 0}

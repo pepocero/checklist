@@ -1,20 +1,20 @@
-import { ArrowLeft, PartyPopper, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Check, PartyPopper, RotateCcw } from 'lucide-react'
 import { useEffect, useId, useRef } from 'react'
 
 interface CompletionDialogProps {
   open: boolean
   totalTasks: number
+  onAccept: () => void
   onReset: () => void
   onGoHome: () => void
-  onClose: () => void
 }
 
 export function CompletionDialog({
   open,
   totalTasks,
+  onAccept,
   onReset,
   onGoHome,
-  onClose,
 }: CompletionDialogProps) {
   const titleId = useId()
   const descriptionId = useId()
@@ -30,7 +30,7 @@ export function CompletionDialog({
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        onClose()
+        onAccept()
       }
     }
 
@@ -42,14 +42,14 @@ export function CompletionDialog({
         previous.focus()
       }
     }
-  }, [open, onClose])
+  }, [open, onAccept])
 
   if (!open) {
     return null
   }
 
   return (
-    <div className="dialog-backdrop" onClick={onClose}>
+    <div className="dialog-backdrop" onClick={onAccept}>
       <div
         className="dialog swal-dialog success"
         role="dialog"
@@ -69,8 +69,12 @@ export function CompletionDialog({
             ref={primaryRef}
             type="button"
             className="btn btn-primary"
-            onClick={onReset}
+            onClick={onAccept}
           >
+            <Check size={18} strokeWidth={2.2} aria-hidden="true" />
+            <span>Aceptar</span>
+          </button>
+          <button type="button" className="btn btn-reset" onClick={onReset}>
             <RotateCcw size={18} strokeWidth={2.2} aria-hidden="true" />
             <span>Reiniciar tarea</span>
           </button>

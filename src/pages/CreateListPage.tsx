@@ -1,9 +1,23 @@
 import { Plus } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
 import { DatabaseError, createListWithTasks } from '../services/database'
 import { parseTaskLines } from '../utils/parseTasks'
+
+const DEMO_LIST_NAME = 'Lista de prueba'
+const DEMO_TASKS = [
+  'Pasaporte',
+  'Cargador del móvil',
+  'Ropa interior',
+  'Neceser',
+  'Zapatillas',
+  'Adaptador de enchufe',
+]
+
+function isDemoListName(value: string): boolean {
+  return value.trim().toLocaleLowerCase('es') === DEMO_LIST_NAME.toLocaleLowerCase('es')
+}
 
 export function CreateListPage() {
   const navigate = useNavigate()
@@ -14,13 +28,12 @@ export function CreateListPage() {
 
   const previewCount = parseTaskLines(rawTasks).length
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function createList(listName: string, taskLines: string[]) {
     setBusy(true)
     setError(null)
 
     try {
-      const list = await createListWithTasks(name, parseTaskLines(rawTasks))
+      const list = await createListWithTasks(listName, taskLines)
       void navigate(`/lista/${list.id}`, { replace: true })
     } catch (cause) {
       const message =
@@ -29,6 +42,32 @@ export function CreateListPage() {
           : 'No se pudo crear la lista.'
       setError(message)
       setBusy(false)
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (isDemoListName(name) && parseTaskLines(rawTasks).length === 0) {
+      await createList(DEMO_LIST_NAME, DEMO_TASKS)
+      return
+    }
+
+    await createList(name, parseTaskLines(rawTasks))
+  }
+
+  function handleNameKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== 'Enter') {
+      return
+    }
+
+    if (!isDemoListName(name)) {
+      return
+    }
+
+    event.preventDefault()
+    if (!busy) {
+      void createList(DEMO_LIST_NAME, DEMO_TASKS)
     }
   }
 
@@ -47,7 +86,8 @@ export function CreateListPage() {
             type="text"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Configuración ordenador nuevo"
+            onKeyDown={handleNameKeyDown}
+            placeholder="Equipaje para el viaje"
             autoComplete="off"
             maxLength={120}
             required
@@ -59,14 +99,16 @@ export function CreateListPage() {
           <textarea
             value={rawTasks}
             onChange={(event) => setRawTasks(event.target.value)}
-            placeholder={'Outlook\nTeams\nProbar la cámara\nAuthenticator'}
+            placeholder={'Pasaporte\nCargador del móvil\nRopa interior\nNeceser\nZapatillas\nAdaptador de enchufe'}
             rows={14}
-            required
+            required={!isDemoListName(name)}
           />
           <small>
-            {previewCount === 1
-              ? '1 tarea se creará al guardar'
-              : `${previewCount} tareas se crearán al guardar`}
+            {isDemoListName(name) && previewCount === 0
+              ? 'Pulsa Enter en el nombre para crear una lista de prueba con 6 tareas'
+              : previewCount === 1
+                ? '1 tarea se creará al guardar'
+                : `${previewCount} tareas se crearán al guardar`}
           </small>
         </label>
 

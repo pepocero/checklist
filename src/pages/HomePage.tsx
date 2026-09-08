@@ -1,18 +1,47 @@
-import { ClipboardList, Plus } from 'lucide-react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  type DragEndEvent,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { ClipboardList, MoveHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ActionBar } from '../components/ActionBar'
 import { AppHeader } from '../components/AppHeader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { InstallPrompt } from '../components/InstallPrompt'
-import { ListCard } from '../components/ListCard'
+import { SortableListCard } from '../components/SortableListCard'
 import { useLists } from '../hooks/useLists'
 import type { TaskListSummary } from '../types'
 
 export function HomePage() {
-  const { lists, isReady, error, deleteList } = useLists()
+  const { lists, setLists, isReady, error, deleteList, reorderLists } = useLists()
   const [pendingDelete, setPendingDelete] = useState<TaskListSummary | null>(null)
   const [busy, setBusy] = useState(false)
+  const [swipeCloseSignal, setSwipeCloseSignal] = useState(0)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 160, tolerance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  )
 
   async function confirmDelete() {
     if (!pendingDelete) {
@@ -23,8 +52,33 @@ export function HomePage() {
     try {
       await deleteList(pendingDelete.id)
       setPendingDelete(null)
+      setSwipeCloseSignal((current) => current + 1)
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    const oldIndex = lists.findIndex((list) => list.id === active.id)
+    const newIndex = lists.findIndex((list) => list.id === over.id)
+
+    if (oldIndex < 0 || newIndex < 0) {
+      return
+    }
+
+    const previous = lists
+    const nextLists = arrayMove(lists, oldIndex, newIndex)
+    setLists(nextLists)
+
+    try {
+      await reorderLists(nextLists.map((list) => list.id))
+    } catch {
+      setLists(previous)
     }
   }
 
@@ -58,11 +112,41 @@ export function HomePage() {
           </Link>
         </div>
       ) : (
-        <div className="list-grid">
-          {lists.map((list) => (
-            <ListCard key={list.id} list={list} onDelete={setPendingDelete} />
-          ))}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={(event) => {
+            void handleDragEnd(event)
+          }}
+        >
+          <SortableContext
+            items={lists.map((list) => list.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="swipe-hint" aria-hidden="true">
+              <span className="swipe-hint-side edit">
+                <Pencil size={14} strokeWidth={2.2} />
+              </span>
+              <span className="swipe-hint-center">
+                <MoveHorizontal size={18} strokeWidth={2.1} />
+                <span>Desliza para editar o eliminar</span>
+              </span>
+              <span className="swipe-hint-side delete">
+                <Trash2 size={14} strokeWidth={2.2} />
+              </span>
+            </div>
+            <div className="list-grid">
+              {lists.map((list) => (
+                <SortableListCard
+                  key={list.id}
+                  list={list}
+                  closeSwipeSignal={swipeCloseSignal}
+                  onDelete={setPendingDelete}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       <ConfirmDialog
@@ -76,7 +160,10 @@ export function HomePage() {
         ]}
         confirmLabel={busy ? 'Eliminando…' : 'Eliminar lista'}
         danger
-        onCancel={() => setPendingDelete(null)}
+        onCancel={() => {
+          setPendingDelete(null)
+          setSwipeCloseSignal((current) => current + 1)
+        }}
         onConfirm={() => {
           void confirmDelete()
         }}

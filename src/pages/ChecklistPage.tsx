@@ -7,7 +7,10 @@ import { ChecklistItem } from '../components/ChecklistItem'
 import { ChecklistProgress } from '../components/ChecklistProgress'
 import { CompletionDialog } from '../components/CompletionDialog'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { NoteDialog } from '../components/NoteDialog'
 import { useChecklist } from '../hooks/useChecklist'
+import type { Task } from '../types'
+import { getTaskNote } from '../utils/taskNote'
 
 export function ChecklistPage() {
   const { id } = useParams()
@@ -26,16 +29,21 @@ export function ChecklistPage() {
   } = useChecklist(id)
   const [confirmReset, setConfirmReset] = useState(false)
   const [showCompletion, setShowCompletion] = useState(false)
+  const [completionDismissed, setCompletionDismissed] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [noteTask, setNoteTask] = useState<Task | null>(null)
 
   useEffect(() => {
-    if (isComplete) {
-      setShowCompletion(true)
+    if (!isComplete) {
+      setShowCompletion(false)
+      setCompletionDismissed(false)
       return
     }
 
-    setShowCompletion(false)
-  }, [isComplete])
+    if (!completionDismissed) {
+      setShowCompletion(true)
+    }
+  }, [isComplete, completionDismissed])
 
   async function handleReset() {
     setBusy(true)
@@ -43,9 +51,15 @@ export function ChecklistPage() {
       await resetTasks()
       setConfirmReset(false)
       setShowCompletion(false)
+      setCompletionDismissed(false)
     } finally {
       setBusy(false)
     }
+  }
+
+  function acceptCompletion() {
+    setShowCompletion(false)
+    setCompletionDismissed(true)
   }
 
   if (isReady && notFound) {
@@ -93,7 +107,12 @@ export function ChecklistPage() {
       ) : (
         <div className="checklist">
           {tasks.map((task) => (
-            <ChecklistItem key={task.id} task={task} onToggle={toggleTask} />
+            <ChecklistItem
+              key={task.id}
+              task={task}
+              onToggle={toggleTask}
+              onOpenNote={setNoteTask}
+            />
           ))}
         </div>
       )}
@@ -115,14 +134,22 @@ export function ChecklistPage() {
         </ActionBar>
       ) : null}
 
+      <NoteDialog
+        open={noteTask !== null}
+        taskText={noteTask?.text ?? ''}
+        note={getTaskNote(noteTask?.note)}
+        mode="view"
+        onClose={() => setNoteTask(null)}
+      />
+
       <CompletionDialog
-        open={showCompletion && !confirmReset}
+        open={showCompletion && !confirmReset && noteTask === null}
         totalTasks={totalCount}
+        onAccept={acceptCompletion}
         onReset={() => setConfirmReset(true)}
         onGoHome={() => {
-                void navigate('/app')
+          void navigate('/app')
         }}
-        onClose={() => setShowCompletion(false)}
       />
 
       <ConfirmDialog

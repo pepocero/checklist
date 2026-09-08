@@ -283,20 +283,128 @@ button {
   gap: 14px;
 }
 
-.list-card {
+.swipe-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px dashed var(--line);
+  background: rgba(255, 253, 248, 0.7);
+  color: var(--ink-muted);
+  font-size: 0.88rem;
+  animation: swipe-hint-pulse 2.4s ease-in-out infinite;
+}
+
+.swipe-hint-center {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.swipe-hint-center span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.swipe-hint-side {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.swipe-hint-side.edit {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.swipe-hint-side.delete {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+@keyframes swipe-hint-pulse {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  35% {
+    transform: translateX(4px);
+  }
+
+  70% {
+    transform: translateX(-4px);
+  }
+}
+
+.list-card-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.list-card-row.is-dragging {
+  z-index: 5;
+  opacity: 0.96;
+}
+
+.list-card-swipe {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
   border-radius: var(--radius);
-  padding: 18px;
+}
+
+.list-card-action {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 76px;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+}
+
+.list-card-action.edit {
+  left: 0;
+  background: var(--accent);
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+.list-card-action.delete {
+  right: 0;
+  background: var(--danger);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.list-card-front {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.18s ease;
+  touch-action: pan-y;
   cursor: pointer;
 }
 
-.list-card:focus-visible,
-.btn:focus-visible,
-.icon-btn:focus-visible,
-.checklist-item:focus-within,
-input:focus-visible,
-textarea:focus-visible {
-  outline: 3px solid var(--accent-soft);
-  outline-offset: 2px;
+.list-card-front.is-swiping {
+  transition: none;
+  touch-action: none;
+}
+
+.list-card {
+  border-radius: var(--radius);
+  padding: 18px;
 }
 
 .list-card-top {
@@ -307,11 +415,15 @@ textarea:focus-visible {
   margin-bottom: 14px;
 }
 
-.list-card-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+.list-card:focus-visible,
+.list-card-front:focus-visible,
+.btn:focus-visible,
+.icon-btn:focus-visible,
+.checklist-item:focus-within,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--accent-soft);
+  outline-offset: 2px;
 }
 
 .progress {
@@ -355,7 +467,7 @@ textarea:focus-visible {
 
 .checklist-item {
   display: grid;
-  grid-template-columns: 28px 1fr;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: start;
   gap: 12px;
   min-height: var(--tap);
@@ -507,6 +619,10 @@ textarea:focus-visible {
 .edit-task-front {
   position: relative;
   z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
   background: #fff;
   border-radius: 14px;
   transition: transform 0.18s ease;
@@ -522,6 +638,64 @@ textarea:focus-visible {
   box-shadow: none;
   min-height: var(--tap);
   min-width: 0;
+}
+
+.note-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.note-btn:hover,
+.note-btn:focus-visible {
+  color: var(--ink-muted);
+  background: var(--bg);
+  border-color: var(--line);
+}
+
+.note-btn.has-note {
+  color: var(--accent);
+}
+
+.note-btn.has-note:hover,
+.note-btn.has-note:focus-visible {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+.checklist-item .note-btn {
+  margin-top: -2px;
+}
+
+.note-dialog-task {
+  margin: 0;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.note-dialog-body {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.note-dialog .field textarea {
+  min-height: 140px;
 }
 
 .drag-handle {
