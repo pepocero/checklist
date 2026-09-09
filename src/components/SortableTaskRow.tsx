@@ -6,8 +6,9 @@ import type { Task } from '../types'
 import { taskHasNote } from '../utils/taskNote'
 
 const DELETE_WIDTH = 76
-const OPEN_THRESHOLD = 40
-const DIRECTION_LOCK = 8
+const OPEN_THRESHOLD = 28
+const DIRECTION_LOCK = 6
+const AXIS_RATIO = 1.15
 
 interface SortableTaskRowProps {
   task: Task
@@ -40,6 +41,7 @@ export function SortableTaskRow({
     isDragging,
   } = useSortable({ id: task.id })
 
+  const frontRef = useRef<HTMLDivElement>(null)
   const [offset, setOffset] = useState(0)
   const [isSwiping, setIsSwiping] = useState(false)
   const offsetRef = useRef(0)
@@ -50,6 +52,7 @@ export function SortableTaskRow({
   const startYRef = useRef(0)
   const originOffsetRef = useRef(0)
   const axisRef = useRef<'none' | 'horizontal' | 'vertical'>('none')
+  const suppressNoteClickRef = useRef(false)
   const hasNote = taskHasNote(task.note)
 
   onRevealChangeRef.current = onRevealChange
@@ -64,24 +67,26 @@ export function SortableTaskRow({
     }
   }
 
+  function clearPointerTracking() {
+    pointerIdRef.current = null
+    axisRef.current = 'none'
+    setIsSwiping(false)
+  }
+
   useEffect(() => {
     offsetRef.current = offset
   }, [offset])
 
   useEffect(() => {
     if (closeSwipeSignal > 0) {
-      setIsSwiping(false)
-      pointerIdRef.current = null
-      axisRef.current = 'none'
+      clearPointerTracking()
       setRevealOffset(0)
     }
   }, [closeSwipeSignal])
 
   useEffect(() => {
     if (isDragging) {
-      setIsSwiping(false)
-      pointerIdRef.current = null
-      axisRef.current = 'none'
+      clearPointerTracking()
       setRevealOffset(0)
     }
   }, [isDragging])
@@ -94,8 +99,43 @@ export function SortableTaskRow({
     }
   }, [task.id])
 
+  useEffect(() => {
+    const node = frontRef.current
+    if (!node) {
+      return
+    }
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (axisRef.current === 'horizontal') {
+        event.preventDefault()
+      }
+    }
+
+    node.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => {
+      node.removeEventListener('touchmove', onTouchMove)
+    }
+  }, [])
+
   function clampOffset(value: number) {
     return Math.min(0, Math.max(-DELETE_WIDTH, value))
+  }
+
+  function lockHorizontal(target: HTMLDivElement, pointerId: number) {
+    axisRef.current = 'horizontal'
+    suppressNoteClickRef.current = true
+    setIsSwiping(true)
+
+    const active = document.activeElement
+    if (active instanceof HTMLElement && target.contains(active)) {
+      active.blur()
+    }
+
+    try {
+      target.setPointerCapture(pointerId)
+    } catch {
+      // Algunos navegadores pueden fallar si el pointer ya terminó.
+    }
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
@@ -103,17 +143,13 @@ export function SortableTaskRow({
       return
     }
 
-    const target = event.target
-    if (target instanceof HTMLElement && target.closest('button, input, textarea')) {
-      return
-    }
-
+    // El asa de arrastre vive fuera; el botón de nota puede iniciar swipe o click.
     pointerIdRef.current = event.pointerId
     startXRef.current = event.clientX
     startYRef.current = event.clientY
     originOffsetRef.current = offsetRef.current
     axisRef.current = 'none'
-    setIsSwiping(false)
+    suppressNoteClickRef.current = false
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
@@ -123,21 +159,23 @@ export function SortableTaskRow({
 
     const deltaX = event.clientX - startXRef.current
     const deltaY = event.clientY - startYRef.current
+    const absX = Math.abs(deltaX)
+    const absY = Math.abs(deltaY)
 
     if (axisRef.current === 'none') {
-      if (Math.abs(deltaX) < DIRECTION_LOCK && Math.abs(deltaY) < DIRECTION_LOCK) {
+      if (absX < DIRECTION_LOCK && absY < DIRECTION_LOCK) {
         return
       }
 
-      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+      if (absX >= absY * AXIS_RATIO) {
+        lockHorizontal(event.currentTarget, event.pointerId)
+      } else if (absY >= absX * AXIS_RATIO) {
         axisRef.current = 'vertical'
         pointerIdRef.current = null
         return
+      } else {
+        return
       }
-
-      axisRef.current = 'horizontal'
-      setIsSwiping(true)
-      event.currentTarget.setPointerCapture(event.pointerId)
     }
 
     if (axisRef.current !== 'horizontal') {
@@ -150,34 +188,43 @@ export function SortableTaskRow({
     offsetRef.current = next
   }
 
-  function finishSwipe(pointerId: number, target: HTMLDivElement) {
-    if (pointerIdRef.current !== pointerId) {
+  function finishSwipe(event: ReactPointerEvent<HTMLDivElement>) {
+    if (pointerIdRef.current !== event.pointerId) {
       return
     }
 
-    if (target.hasPointerCapture(pointerId)) {
-      target.releasePointerCapture(pointerId)
+    const axis = axisRef.current
+    const pointerId = event.pointerId
+
+    if (event.currentTarget.hasPointerCapture(pointerId)) {
+      try {
+        event.currentTarget.releasePointerCapture(pointerId)
+      } catch {
+        // Ignorar si ya se liberó.
+      }
     }
 
-    pointerIdRef.current = null
-    setIsSwiping(false)
+    if (axis === 'horizontal') {
+      suppressNoteClickRef.current = true
+      const next = offsetRef.current <= -OPEN_THRESHOLD ? -DELETE_WIDTH : 0
+      setRevealOffset(next)
+    }
 
-    if (axisRef.current !== 'horizontal') {
-      axisRef.current = 'none'
+    clearPointerTracking()
+  }
+
+  function onLostPointerCapture(event: ReactPointerEvent<HTMLDivElement>) {
+    if (pointerIdRef.current !== event.pointerId) {
       return
     }
 
-    axisRef.current = 'none'
-    const next = offsetRef.current <= -OPEN_THRESHOLD ? -DELETE_WIDTH : 0
-    setRevealOffset(next)
-  }
+    if (axisRef.current === 'horizontal') {
+      suppressNoteClickRef.current = true
+      const next = offsetRef.current <= -OPEN_THRESHOLD ? -DELETE_WIDTH : 0
+      setRevealOffset(next)
+    }
 
-  function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
-    finishSwipe(event.pointerId, event.currentTarget)
-  }
-
-  function onPointerCancel(event: ReactPointerEvent<HTMLDivElement>) {
-    finishSwipe(event.pointerId, event.currentTarget)
+    clearPointerTracking()
   }
 
   const style = {
@@ -215,12 +262,14 @@ export function SortableTaskRow({
         </button>
 
         <div
+          ref={frontRef}
           className={`edit-task-front ${isSwiping ? 'is-swiping' : ''}`}
           style={{ transform: `translate3d(${offset}px, 0, 0)` }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerCancel}
+          onPointerUp={finishSwipe}
+          onPointerCancel={finishSwipe}
+          onLostPointerCapture={onLostPointerCapture}
         >
           <input
             type="text"
@@ -244,7 +293,13 @@ export function SortableTaskRow({
             className={`note-btn ${hasNote ? 'has-note' : ''}`}
             aria-label={hasNote ? 'Editar nota' : 'Añadir nota'}
             title={hasNote ? 'Editar nota' : 'Añadir nota'}
-            onClick={() => onEditNote(task)}
+            onClick={() => {
+              if (suppressNoteClickRef.current) {
+                suppressNoteClickRef.current = false
+                return
+              }
+              onEditNote(task)
+            }}
           >
             <StickyNote size={18} strokeWidth={2.1} aria-hidden="true" />
           </button>

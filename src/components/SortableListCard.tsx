@@ -7,8 +7,9 @@ import type { TaskListSummary } from '../types'
 import { ChecklistProgress } from './ChecklistProgress'
 
 const ACTION_WIDTH = 76
-const OPEN_THRESHOLD = 36
-const DIRECTION_LOCK = 10
+const OPEN_THRESHOLD = 28
+const DIRECTION_LOCK = 6
+const AXIS_RATIO = 1.15
 
 interface SortableListCardProps {
   list: TaskListSummary
@@ -70,6 +71,24 @@ export function SortableListCard({
     }
   }, [isDragging])
 
+  useEffect(() => {
+    const node = frontRef.current
+    if (!node) {
+      return
+    }
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (axisRef.current === 'horizontal') {
+        event.preventDefault()
+      }
+    }
+
+    node.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => {
+      node.removeEventListener('touchmove', onTouchMove)
+    }
+  }, [])
+
   function clampOffset(value: number) {
     return Math.min(ACTION_WIDTH, Math.max(-ACTION_WIDTH, value))
   }
@@ -82,6 +101,18 @@ export function SortableListCard({
       return ACTION_WIDTH
     }
     return 0
+  }
+
+  function lockHorizontal(target: HTMLDivElement, pointerId: number) {
+    axisRef.current = 'horizontal'
+    suppressClickRef.current = true
+    setIsSwiping(true)
+
+    try {
+      target.setPointerCapture(pointerId)
+    } catch {
+      // Algunos navegadores pueden fallar si el pointer ya terminó.
+    }
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
@@ -103,25 +134,21 @@ export function SortableListCard({
 
     const deltaX = event.clientX - startXRef.current
     const deltaY = event.clientY - startYRef.current
+    const absX = Math.abs(deltaX)
+    const absY = Math.abs(deltaY)
 
     if (axisRef.current === 'none') {
-      if (Math.abs(deltaX) < DIRECTION_LOCK && Math.abs(deltaY) < DIRECTION_LOCK) {
+      if (absX < DIRECTION_LOCK && absY < DIRECTION_LOCK) {
         return
       }
 
-      if (Math.abs(deltaY) >= Math.abs(deltaX)) {
+      if (absX >= absY * AXIS_RATIO) {
+        lockHorizontal(event.currentTarget, event.pointerId)
+      } else if (absY >= absX * AXIS_RATIO) {
         axisRef.current = 'vertical'
         return
-      }
-
-      axisRef.current = 'horizontal'
-      suppressClickRef.current = true
-      setIsSwiping(true)
-
-      try {
-        event.currentTarget.setPointerCapture(event.pointerId)
-      } catch {
-        // Algunos navegadores pueden fallar si el pointer ya terminó.
+      } else {
+        return
       }
     }
 

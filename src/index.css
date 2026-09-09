@@ -395,6 +395,8 @@ button {
   transition: transform 0.18s ease;
   touch-action: pan-y;
   cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .list-card-front.is-swiping {
@@ -627,6 +629,8 @@ textarea:focus-visible {
   border-radius: 14px;
   transition: transform 0.18s ease;
   touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .edit-task-front.is-swiping {
@@ -638,6 +642,9 @@ textarea:focus-visible {
   box-shadow: none;
   min-height: var(--tap);
   min-width: 0;
+  touch-action: pan-y;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .note-btn {
