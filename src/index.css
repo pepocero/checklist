@@ -398,7 +398,9 @@ button {
   cursor: pointer;
   transition: transform 0.18s ease;
   touch-action: pan-y;
-  background: var(--bg);
+  background: var(--bg-elevated);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .list-card-front.is-swiping {

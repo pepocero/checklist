@@ -1,7 +1,13 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 
-const DIRECTION_LOCK = 10
-const OPEN_RATIO = 0.35
+const DIRECTION_LOCK = 8
+const OPEN_RATIO = 0.32
 
 interface UseLeftSwipeOptions {
   openWidth: number
@@ -16,57 +22,144 @@ export function useLeftSwipe({
 }: UseLeftSwipeOptions) {
   const [offset, setOffset] = useState(0)
   const [isSwiping, setIsSwiping] = useState(false)
+  const [surface, setSurface] = useState<HTMLElement | null>(null)
   const offsetRef = useRef(0)
-  const pointerIdRef = useRef<number | null>(null)
+  const openWidthRef = useRef(openWidth)
+  const disabledRef = useRef(disabled)
   const startXRef = useRef(0)
   const startYRef = useRef(0)
   const originOffsetRef = useRef(0)
   const axisRef = useRef<'none' | 'horizontal' | 'vertical'>('none')
   const movedRef = useRef(false)
+  const activeTouchRef = useRef(false)
+  const pointerIdRef = useRef<number | null>(null)
 
-  function applyOffset(next: number) {
-    const clamped = Math.min(0, Math.max(-openWidth, next))
+  openWidthRef.current = openWidth
+  disabledRef.current = disabled
+
+  const applyOffset = useCallback((next: number) => {
+    const width = openWidthRef.current
+    const clamped = Math.min(0, Math.max(-width, next))
     offsetRef.current = clamped
     setOffset(clamped)
-  }
+  }, [])
 
-  function clearTracking() {
-    pointerIdRef.current = null
-    axisRef.current = 'none'
-    setIsSwiping(false)
-  }
+  const snapFromCurrent = useCallback(() => {
+    const width = openWidthRef.current
+    const opened = offsetRef.current <= -width * OPEN_RATIO
+    applyOffset(opened ? -width : 0)
+  }, [applyOffset])
 
-  function close(behavior: 'instant' | 'animate' = 'animate') {
-    if (behavior === 'instant') {
-      applyOffset(0)
-    } else {
-      applyOffset(0)
-    }
+  const close = useCallback(() => {
+    applyOffset(0)
     movedRef.current = false
-    clearTracking()
-  }
+    axisRef.current = 'none'
+    activeTouchRef.current = false
+    pointerIdRef.current = null
+    setIsSwiping(false)
+  }, [applyOffset])
 
   useEffect(() => {
     if (closeSignal > 0) {
-      close('instant')
+      close()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to signal bumps
-  }, [closeSignal])
+  }, [closeSignal, close])
 
   useEffect(() => {
     if (disabled) {
-      close('instant')
+      close()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [disabled])
+  }, [disabled, close])
 
   useEffect(() => {
     applyOffset(Math.max(-openWidth, Math.min(0, offsetRef.current)))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openWidth])
+  }, [openWidth, applyOffset])
+
+  useEffect(() => {
+    if (!surface) {
+      return
+    }
+
+    function resetAxis() {
+      axisRef.current = 'none'
+      activeTouchRef.current = false
+      setIsSwiping(false)
+    }
+
+    function onTouchStart(event: TouchEvent) {
+      if (disabledRef.current || event.touches.length !== 1) {
+        return
+      }
+
+      const touch = event.touches[0]
+      startXRef.current = touch.clientX
+      startYRef.current = touch.clientY
+      originOffsetRef.current = offsetRef.current
+      axisRef.current = 'none'
+      movedRef.current = false
+      activeTouchRef.current = true
+      pointerIdRef.current = null
+    }
+
+    function onTouchMove(event: TouchEvent) {
+      if (!activeTouchRef.current || disabledRef.current || event.touches.length !== 1) {
+        return
+      }
+
+      const touch = event.touches[0]
+      const deltaX = touch.clientX - startXRef.current
+      const deltaY = touch.clientY - startYRef.current
+
+      if (axisRef.current === 'none') {
+        if (Math.abs(deltaX) < DIRECTION_LOCK && Math.abs(deltaY) < DIRECTION_LOCK) {
+          return
+        }
+
+        if (Math.abs(deltaY) > Math.abs(deltaX)) {
+          axisRef.current = 'vertical'
+          activeTouchRef.current = false
+          return
+        }
+
+        axisRef.current = 'horizontal'
+        setIsSwiping(true)
+      }
+
+      if (axisRef.current !== 'horizontal') {
+        return
+      }
+
+      event.preventDefault()
+      const next = originOffsetRef.current + deltaX
+      if (Math.abs(next - originOffsetRef.current) > 6) {
+        movedRef.current = true
+      }
+      applyOffset(next)
+    }
+
+    function onTouchEnd() {
+      if (axisRef.current === 'horizontal') {
+        snapFromCurrent()
+      }
+
+      resetAxis()
+    }
+
+    surface.addEventListener('touchstart', onTouchStart, { passive: true })
+    surface.addEventListener('touchmove', onTouchMove, { passive: false })
+    surface.addEventListener('touchend', onTouchEnd)
+    surface.addEventListener('touchcancel', onTouchEnd)
+
+    return () => {
+      surface.removeEventListener('touchstart', onTouchStart)
+      surface.removeEventListener('touchmove', onTouchMove)
+      surface.removeEventListener('touchend', onTouchEnd)
+      surface.removeEventListener('touchcancel', onTouchEnd)
+    }
+  }, [surface, applyOffset, snapFromCurrent])
 
   function onPointerDown(event: ReactPointerEvent<HTMLElement>) {
-    if (disabled || event.button !== 0) {
+    if (disabledRef.current || event.pointerType === 'touch' || event.button !== 0) {
       return
     }
 
@@ -76,10 +169,11 @@ export function useLeftSwipe({
     originOffsetRef.current = offsetRef.current
     axisRef.current = 'none'
     movedRef.current = false
+    activeTouchRef.current = false
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLElement>) {
-    if (pointerIdRef.current !== event.pointerId || disabled) {
+    if (pointerIdRef.current !== event.pointerId || disabledRef.current) {
       return
     }
 
@@ -113,7 +207,7 @@ export function useLeftSwipe({
 
     event.preventDefault()
     const next = originOffsetRef.current + deltaX
-    if (Math.abs(next - originOffsetRef.current) > 8) {
+    if (Math.abs(next - originOffsetRef.current) > 6) {
       movedRef.current = true
     }
     applyOffset(next)
@@ -136,24 +230,12 @@ export function useLeftSwipe({
     }
 
     if (axis === 'horizontal') {
-      const opened = offsetRef.current <= -openWidth * OPEN_RATIO
-      applyOffset(opened ? -openWidth : 0)
+      snapFromCurrent()
     }
 
-    clearTracking()
-  }
-
-  function onLostPointerCapture(event: ReactPointerEvent<HTMLElement>) {
-    if (pointerIdRef.current !== event.pointerId) {
-      return
-    }
-
-    if (axisRef.current === 'horizontal') {
-      const opened = offsetRef.current <= -openWidth * OPEN_RATIO
-      applyOffset(opened ? -openWidth : 0)
-    }
-
-    clearTracking()
+    pointerIdRef.current = null
+    axisRef.current = 'none'
+    setIsSwiping(false)
   }
 
   function shouldIgnoreClick() {
@@ -174,12 +256,12 @@ export function useLeftSwipe({
     offset,
     isOpen: offset < -8,
     isSwiping,
+    setSurfaceRef: setSurface,
     handlers: {
       onPointerDown,
       onPointerMove,
       onPointerUp: finishPointer,
       onPointerCancel: finishPointer,
-      onLostPointerCapture,
     },
     close,
     shouldIgnoreClick,

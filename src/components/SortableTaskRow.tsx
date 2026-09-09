@@ -39,7 +39,14 @@ export function SortableTaskRow({
     isDragging,
   } = useSortable({ id: task.id })
 
-  const { offset, isOpen, isSwiping, handlers, close } = useLeftSwipe({
+  const {
+    offset,
+    isOpen,
+    isSwiping,
+    setSurfaceRef,
+    handlers,
+    close,
+  } = useLeftSwipe({
     openWidth: DELETE_WIDTH,
     closeSignal: closeSwipeSignal,
     disabled: isDragging,
@@ -101,6 +108,7 @@ export function SortableTaskRow({
         </button>
 
         <div
+          ref={setSurfaceRef}
           className={`edit-task-front ${isSwiping ? 'is-swiping' : ''}`}
           style={{ transform: `translate3d(${offset}px, 0, 0)` }}
           {...handlers}
@@ -112,7 +120,7 @@ export function SortableTaskRow({
             onChange={(event) => onDraftChange(task.id, event.target.value)}
             onFocus={() => {
               if (isOpen) {
-                close('instant')
+                close()
               }
             }}
             onBlur={(event) => onBlur(task, event.target.value)}

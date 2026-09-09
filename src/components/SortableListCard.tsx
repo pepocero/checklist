@@ -31,7 +31,14 @@ export function SortableListCard({
     isDragging,
   } = useSortable({ id: list.id })
 
-  const { offset, isOpen, isSwiping, handlers, shouldIgnoreClick } = useLeftSwipe({
+  const {
+    offset,
+    isOpen,
+    isSwiping,
+    setSurfaceRef,
+    handlers,
+    shouldIgnoreClick,
+  } = useLeftSwipe({
     openWidth: ACTIONS_WIDTH,
     closeSignal: closeSwipeSignal,
     disabled: isDragging,
@@ -93,6 +100,7 @@ export function SortableListCard({
         </div>
 
         <div
+          ref={setSurfaceRef}
           className={`list-card-front ${isSwiping ? 'is-swiping' : ''}`}
           style={{ transform: `translate3d(${offset}px, 0, 0)` }}
           role="button"
