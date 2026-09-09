@@ -2,7 +2,6 @@ import {
   DndContext,
   KeyboardSensor,
   PointerSensor,
-  TouchSensor,
   closestCenter,
   type DragEndEvent,
   useSensor,
@@ -14,7 +13,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { ClipboardList, MoveHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ClipboardList, ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ActionBar } from '../components/ActionBar'
@@ -33,10 +32,7 @@ export function HomePage() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 6 },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 160, tolerance: 8 },
+      activationConstraint: { distance: 8 },
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -124,15 +120,17 @@ export function HomePage() {
             strategy={verticalListSortingStrategy}
           >
             <div className="swipe-hint" aria-hidden="true">
-              <span className="swipe-hint-side edit">
-                <Pencil size={14} strokeWidth={2.2} />
-              </span>
               <span className="swipe-hint-center">
-                <MoveHorizontal size={18} strokeWidth={2.1} />
-                <span>Desliza para editar o eliminar</span>
+                <ArrowLeft size={18} strokeWidth={2.1} />
+                <span>Desliza a la izquierda</span>
               </span>
-              <span className="swipe-hint-side delete">
-                <Trash2 size={14} strokeWidth={2.2} />
+              <span className="swipe-hint-actions">
+                <span className="swipe-hint-side edit">
+                  <Pencil size={14} strokeWidth={2.2} />
+                </span>
+                <span className="swipe-hint-side delete">
+                  <Trash2 size={14} strokeWidth={2.2} />
+                </span>
               </span>
             </div>
             <div className="list-grid">

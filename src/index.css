@@ -310,6 +310,13 @@ button {
   text-overflow: ellipsis;
 }
 
+.swipe-hint-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .swipe-hint-side {
   display: inline-flex;
   align-items: center;
@@ -321,8 +328,8 @@ button {
 }
 
 .swipe-hint-side.edit {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: #0284c7;
+  background: #e0f2fe;
 }
 
 .swipe-hint-side.delete {
@@ -336,12 +343,8 @@ button {
     transform: translateX(0);
   }
 
-  35% {
-    transform: translateX(4px);
-  }
-
-  70% {
-    transform: translateX(-4px);
+  50% {
+    transform: translateX(-6px);
   }
 }
 
@@ -364,11 +367,15 @@ button {
   border-radius: var(--radius);
 }
 
-.list-card-action {
+.list-card-actions {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 76px;
+  inset: 0 0 0 auto;
+  width: 152px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.list-card-action {
   border: 0;
   display: inline-flex;
   align-items: center;
@@ -378,25 +385,20 @@ button {
 }
 
 .list-card-action.edit {
-  left: 0;
-  background: var(--accent);
-  border-radius: var(--radius) 0 0 var(--radius);
+  background: #38bdf8;
 }
 
 .list-card-action.delete {
-  right: 0;
   background: var(--danger);
-  border-radius: 0 var(--radius) var(--radius) 0;
 }
 
 .list-card-front {
   position: relative;
   z-index: 1;
+  cursor: pointer;
   transition: transform 0.18s ease;
   touch-action: pan-y;
-  cursor: pointer;
-  -webkit-user-select: none;
-  user-select: none;
+  background: var(--bg);
 }
 
 .list-card-front.is-swiping {
@@ -629,8 +631,6 @@ textarea:focus-visible {
   border-radius: 14px;
   transition: transform 0.18s ease;
   touch-action: pan-y;
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 .edit-task-front.is-swiping {
@@ -642,9 +642,6 @@ textarea:focus-visible {
   box-shadow: none;
   min-height: var(--tap);
   min-width: 0;
-  touch-action: pan-y;
-  -webkit-user-select: text;
-  user-select: text;
 }
 
 .note-btn {

@@ -1,15 +1,13 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Pencil, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useLeftSwipe } from '../hooks/useLeftSwipe'
 import type { TaskListSummary } from '../types'
 import { ChecklistProgress } from './ChecklistProgress'
 
 const ACTION_WIDTH = 76
-const OPEN_THRESHOLD = 28
-const DIRECTION_LOCK = 6
-const AXIS_RATIO = 1.15
+const ACTIONS_WIDTH = ACTION_WIDTH * 2
 
 interface SortableListCardProps {
   list: TaskListSummary
@@ -33,178 +31,14 @@ export function SortableListCard({
     isDragging,
   } = useSortable({ id: list.id })
 
-  const frontRef = useRef<HTMLDivElement>(null)
-  const [offset, setOffset] = useState(0)
-  const [isSwiping, setIsSwiping] = useState(false)
-  const offsetRef = useRef(0)
-  const pointerIdRef = useRef<number | null>(null)
-  const startXRef = useRef(0)
-  const startYRef = useRef(0)
-  const originOffsetRef = useRef(0)
-  const axisRef = useRef<'none' | 'horizontal' | 'vertical'>('none')
-  const suppressClickRef = useRef(false)
-
-  function applyOffset(next: number) {
-    offsetRef.current = next
-    setOffset(next)
-  }
-
-  function clearPointerTracking() {
-    pointerIdRef.current = null
-    axisRef.current = 'none'
-    setIsSwiping(false)
-  }
-
-  useEffect(() => {
-    if (closeSwipeSignal > 0) {
-      applyOffset(0)
-      clearPointerTracking()
-      suppressClickRef.current = false
-    }
-  }, [closeSwipeSignal])
-
-  useEffect(() => {
-    if (isDragging) {
-      applyOffset(0)
-      clearPointerTracking()
-      suppressClickRef.current = false
-    }
-  }, [isDragging])
-
-  useEffect(() => {
-    const node = frontRef.current
-    if (!node) {
-      return
-    }
-
-    const onTouchMove = (event: TouchEvent) => {
-      if (axisRef.current === 'horizontal') {
-        event.preventDefault()
-      }
-    }
-
-    node.addEventListener('touchmove', onTouchMove, { passive: false })
-    return () => {
-      node.removeEventListener('touchmove', onTouchMove)
-    }
-  }, [])
-
-  function clampOffset(value: number) {
-    return Math.min(ACTION_WIDTH, Math.max(-ACTION_WIDTH, value))
-  }
-
-  function snapOffset(value: number) {
-    if (value <= -OPEN_THRESHOLD) {
-      return -ACTION_WIDTH
-    }
-    if (value >= OPEN_THRESHOLD) {
-      return ACTION_WIDTH
-    }
-    return 0
-  }
-
-  function lockHorizontal(target: HTMLDivElement, pointerId: number) {
-    axisRef.current = 'horizontal'
-    suppressClickRef.current = true
-    setIsSwiping(true)
-
-    try {
-      target.setPointerCapture(pointerId)
-    } catch {
-      // Algunos navegadores pueden fallar si el pointer ya terminó.
-    }
-  }
-
-  function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (isDragging || event.button !== 0) {
-      return
-    }
-
-    pointerIdRef.current = event.pointerId
-    startXRef.current = event.clientX
-    startYRef.current = event.clientY
-    originOffsetRef.current = offsetRef.current
-    axisRef.current = 'none'
-  }
-
-  function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    if (pointerIdRef.current !== event.pointerId || isDragging) {
-      return
-    }
-
-    const deltaX = event.clientX - startXRef.current
-    const deltaY = event.clientY - startYRef.current
-    const absX = Math.abs(deltaX)
-    const absY = Math.abs(deltaY)
-
-    if (axisRef.current === 'none') {
-      if (absX < DIRECTION_LOCK && absY < DIRECTION_LOCK) {
-        return
-      }
-
-      if (absX >= absY * AXIS_RATIO) {
-        lockHorizontal(event.currentTarget, event.pointerId)
-      } else if (absY >= absX * AXIS_RATIO) {
-        axisRef.current = 'vertical'
-        return
-      } else {
-        return
-      }
-    }
-
-    if (axisRef.current !== 'horizontal') {
-      return
-    }
-
-    event.preventDefault()
-    applyOffset(clampOffset(originOffsetRef.current + deltaX))
-  }
-
-  function finishPointer(event: ReactPointerEvent<HTMLDivElement>) {
-    if (pointerIdRef.current !== event.pointerId) {
-      return
-    }
-
-    const axis = axisRef.current
-    const pointerId = event.pointerId
-
-    if (event.currentTarget.hasPointerCapture(pointerId)) {
-      try {
-        event.currentTarget.releasePointerCapture(pointerId)
-      } catch {
-        // Ignorar si ya se liberó.
-      }
-    }
-
-    if (axis === 'horizontal') {
-      suppressClickRef.current = true
-      applyOffset(snapOffset(offsetRef.current))
-    }
-
-    clearPointerTracking()
-  }
-
-  function onLostPointerCapture(event: ReactPointerEvent<HTMLDivElement>) {
-    if (pointerIdRef.current !== event.pointerId) {
-      return
-    }
-
-    if (axisRef.current === 'horizontal') {
-      suppressClickRef.current = true
-      applyOffset(snapOffset(offsetRef.current))
-    }
-
-    clearPointerTracking()
-  }
+  const { offset, isOpen, isSwiping, handlers, shouldIgnoreClick } = useLeftSwipe({
+    openWidth: ACTIONS_WIDTH,
+    closeSignal: closeSwipeSignal,
+    disabled: isDragging,
+  })
 
   function onFrontClick() {
-    if (suppressClickRef.current) {
-      suppressClickRef.current = false
-      return
-    }
-
-    if (offsetRef.current !== 0) {
-      applyOffset(0)
+    if (shouldIgnoreClick()) {
       return
     }
 
@@ -220,7 +54,7 @@ export function SortableListCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`list-card-row ${isDragging ? 'is-dragging' : ''} ${offset !== 0 ? 'is-revealed' : ''}`}
+      className={`list-card-row ${isDragging ? 'is-dragging' : ''} ${isOpen ? 'is-revealed' : ''}`}
     >
       <button
         ref={setActivatorNodeRef}
@@ -235,29 +69,30 @@ export function SortableListCard({
       </button>
 
       <div className="list-card-swipe">
-        <button
-          type="button"
-          className="list-card-action edit"
-          aria-label={`Editar ${list.name}`}
-          tabIndex={offset > 0 ? 0 : -1}
-          onClick={() => {
-            void navigate(`/lista/${list.id}/editar`)
-          }}
-        >
-          <Pencil size={18} strokeWidth={2.1} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="list-card-action delete"
-          aria-label={`Eliminar ${list.name}`}
-          tabIndex={offset < 0 ? 0 : -1}
-          onClick={() => onDelete(list)}
-        >
-          <Trash2 size={18} strokeWidth={2.1} aria-hidden="true" />
-        </button>
+        <div className="list-card-actions" aria-hidden={!isOpen}>
+          <button
+            type="button"
+            className="list-card-action edit"
+            aria-label={`Editar ${list.name}`}
+            tabIndex={isOpen ? 0 : -1}
+            onClick={() => {
+              void navigate(`/lista/${list.id}/editar`)
+            }}
+          >
+            <Pencil size={18} strokeWidth={2.1} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="list-card-action delete"
+            aria-label={`Eliminar ${list.name}`}
+            tabIndex={isOpen ? 0 : -1}
+            onClick={() => onDelete(list)}
+          >
+            <Trash2 size={18} strokeWidth={2.1} aria-hidden="true" />
+          </button>
+        </div>
 
         <div
-          ref={frontRef}
           className={`list-card-front ${isSwiping ? 'is-swiping' : ''}`}
           style={{ transform: `translate3d(${offset}px, 0, 0)` }}
           role="button"
@@ -270,11 +105,7 @@ export function SortableListCard({
               onFrontClick()
             }
           }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={finishPointer}
-          onPointerCancel={finishPointer}
-          onLostPointerCapture={onLostPointerCapture}
+          {...handlers}
         >
           <article className="list-card">
             <div className="list-card-top">
