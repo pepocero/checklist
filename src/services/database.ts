@@ -37,38 +37,78 @@ function now(): number {
 
 export function getDatabase(): Promise<IDBPDatabase<ChecklistSchema>> {
   if (!dbPromise) {
-    dbPromise = openDB<ChecklistSchema>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion, _newVersion, transaction) {
-        if (!db.objectStoreNames.contains('lists')) {
-          const lists = db.createObjectStore('lists', { keyPath: 'id' })
-          lists.createIndex('by-updatedAt', 'updatedAt')
-          lists.createIndex('by-order', 'order')
-        } else if (oldVersion < 2) {
-          const lists = transaction.objectStore('lists')
-          if (!lists.indexNames.contains('by-order')) {
-            lists.createIndex('by-order', 'order')
-          }
-        }
+    dbPromise = new Promise<IDBPDatabase<ChecklistSchema>>((resolve, reject) => {
+      const timeoutId = window.setTimeout(() => {
+        reject(
+          new DatabaseError(
+            'No se pudo abrir la base de datos. Cierra otras pestañas o ventanas de CheckList e inténtalo de nuevo.',
+          ),
+        )
+      }, 8000)
 
-        if (!db.objectStoreNames.contains('tasks')) {
-          const tasks = db.createObjectStore('tasks', { keyPath: 'id' })
-          tasks.createIndex('by-listId', 'listId')
-        }
-      },
+      void openDB<ChecklistSchema>(DB_NAME, DB_VERSION, {
+        upgrade(db, oldVersion, _newVersion, transaction) {
+          if (!db.objectStoreNames.contains('lists')) {
+            const lists = db.createObjectStore('lists', { keyPath: 'id' })
+            lists.createIndex('by-updatedAt', 'updatedAt')
+            lists.createIndex('by-order', 'order')
+          } else if (oldVersion < 2) {
+            const lists = transaction.objectStore('lists')
+            if (!lists.indexNames.contains('by-order')) {
+              lists.createIndex('by-order', 'order')
+            }
+          }
+
+          if (!db.objectStoreNames.contains('tasks')) {
+            const tasks = db.createObjectStore('tasks', { keyPath: 'id' })
+            tasks.createIndex('by-listId', 'listId')
+          }
+        },
+        blocked() {
+          console.warn(
+            'CheckList: otra pestaña o la PWA instalada está bloqueando la base de datos. Ciérralas e inténtalo de nuevo.',
+          )
+        },
+      })
+        .then(async (db) => {
+          db.addEventListener('close', () => {
+            dbPromise = null
+          })
+          await ensureListOrders(db)
+          await ensureTaskNotes(db)
+          await ensureTaskReminders(db)
+          return db
+        })
+        .then((db) => {
+          window.clearTimeout(timeoutId)
+          resolve(db)
+        })
+        .catch((cause: unknown) => {
+          window.clearTimeout(timeoutId)
+          if (cause instanceof DatabaseError) {
+            reject(cause)
+            return
+          }
+          reject(new DatabaseError('No se pudo abrir la base de datos local.', { cause }))
+        })
+    }).catch((cause: unknown) => {
+      dbPromise = null
+      throw cause
     })
-      .then(async (db) => {
-        await ensureListOrders(db)
-        await ensureTaskNotes(db)
-        await ensureTaskReminders(db)
-        return db
-      })
-      .catch((cause: unknown) => {
-        dbPromise = null
-        throw new DatabaseError('No se pudo abrir la base de datos local.', { cause })
-      })
   }
 
   return dbPromise
+}
+
+function normalizeTask(task: Task): Task {
+  return {
+    ...task,
+    note: typeof task.note === 'string' ? task.note : '',
+    reminderAt:
+      typeof task.reminderAt === 'number' && Number.isFinite(task.reminderAt)
+        ? task.reminderAt
+        : null,
+  }
 }
 
 function sortLists<T extends TaskList>(lists: T[]): T[] {
@@ -125,39 +165,40 @@ async function ensureTaskNotes(db: IDBPDatabase<ChecklistSchema>): Promise<void>
 }
 
 async function ensureTaskReminders(db: IDBPDatabase<ChecklistSchema>): Promise<void> {
-  const tx = db.transaction('tasks', 'readwrite')
-  const tasks = await tx.store.getAll()
+  const readTx = db.transaction('tasks', 'readonly')
+  const tasks = await readTx.store.getAll()
+  await readTx.done
 
-  for (const task of tasks) {
-    const hasKey = Object.prototype.hasOwnProperty.call(task, 'reminderAt')
-    const valid =
-      task.reminderAt === null ||
-      (typeof task.reminderAt === 'number' && Number.isFinite(task.reminderAt))
+  const toUpdate = tasks.filter((task) => {
+    const normalized = normalizeTask(task)
+    return (
+      !Object.prototype.hasOwnProperty.call(task, 'reminderAt') ||
+      normalized.note !== task.note ||
+      normalized.reminderAt !== task.reminderAt
+    )
+  })
 
-    if (hasKey && valid) {
-      continue
-    }
-
-    await tx.store.put({
-      ...task,
-      reminderAt:
-        typeof task.reminderAt === 'number' && Number.isFinite(task.reminderAt)
-          ? task.reminderAt
-          : null,
-    })
+  if (toUpdate.length === 0) {
+    return
   }
 
-  await tx.done
+  const writeTx = db.transaction('tasks', 'readwrite')
+  for (const task of toUpdate) {
+    await writeTx.store.put(normalizeTask(task))
+  }
+  await writeTx.done
 }
 
 function sortTasks(tasks: Task[]): Task[] {
-  return [...tasks].sort((a, b) => {
-    if (a.order !== b.order) {
-      return a.order - b.order
-    }
+  return [...tasks]
+    .map((task) => normalizeTask(task))
+    .sort((a, b) => {
+      if (a.order !== b.order) {
+        return a.order - b.order
+      }
 
-    return a.createdAt - b.createdAt
-  })
+      return a.createdAt - b.createdAt
+    })
 }
 
 function requireName(name: string): string {

@@ -41,6 +41,7 @@ export function CreateListPage() {
           ? cause.message
           : 'No se pudo crear la lista.'
       setError(message)
+    } finally {
       setBusy(false)
     }
   }

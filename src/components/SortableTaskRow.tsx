@@ -238,24 +238,26 @@ export function SortableTaskRow({
               }
             }}
           />
-          <button
-            type="button"
-            className={`note-btn ${hasReminder ? 'has-reminder' : ''}`}
-            aria-label={hasReminder ? 'Editar recordatorio' : 'Añadir recordatorio'}
-            title={hasReminder ? 'Editar recordatorio' : 'Añadir recordatorio'}
-            onClick={() => onEditReminder(task)}
-          >
-            <Bell size={18} strokeWidth={2.1} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className={`note-btn ${hasNote ? 'has-note' : ''}`}
-            aria-label={hasNote ? 'Editar nota' : 'Añadir nota'}
-            title={hasNote ? 'Editar nota' : 'Añadir nota'}
-            onClick={() => onEditNote(task)}
-          >
-            <StickyNote size={18} strokeWidth={2.1} aria-hidden="true" />
-          </button>
+          <div className="edit-task-actions">
+            <button
+              type="button"
+              className={`note-btn ${hasReminder ? 'has-reminder' : ''}`}
+              aria-label={hasReminder ? 'Editar recordatorio' : 'Añadir recordatorio'}
+              title={hasReminder ? 'Editar recordatorio' : 'Añadir recordatorio'}
+              onClick={() => onEditReminder(task)}
+            >
+              <Bell size={18} strokeWidth={2.1} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={`note-btn ${hasNote ? 'has-note' : ''}`}
+              aria-label={hasNote ? 'Editar nota' : 'Añadir nota'}
+              title={hasNote ? 'Editar nota' : 'Añadir nota'}
+              onClick={() => onEditNote(task)}
+            >
+              <StickyNote size={18} strokeWidth={2.1} aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

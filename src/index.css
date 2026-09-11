@@ -105,8 +105,7 @@ button {
 .install-banner,
 .edit-tasks,
 .field input,
-.field textarea,
-.edit-task-row input {
+.field textarea {
   background: var(--bg-elevated);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
@@ -555,8 +554,7 @@ textarea:focus-visible {
 }
 
 .field input,
-.field textarea,
-.edit-task-row input {
+.field textarea {
   width: 100%;
   border-radius: 14px;
   border: 1px solid var(--line);
@@ -630,11 +628,14 @@ textarea:focus-visible {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 4px;
-  background: #fff;
+  gap: 2px;
+  padding-right: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
   border-radius: 14px;
+  box-shadow: var(--shadow);
   transition: transform 0.18s ease;
   touch-action: pan-y;
 }
@@ -644,10 +645,21 @@ textarea:focus-visible {
   touch-action: none;
 }
 
+.edit-task-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
 .edit-task-row input {
+  border: 0;
+  background: transparent;
   box-shadow: none;
+  border-radius: 14px;
   min-height: var(--tap);
   min-width: 0;
+  padding: 14px;
 }
 
 .note-btn {

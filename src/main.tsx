@@ -8,7 +8,10 @@ import './index.css'
 
 startInstallPromptCapture()
 registerSW({ immediate: true })
-startReminderSync()
+
+window.setTimeout(() => {
+  startReminderSync()
+}, 0)
 
 const root = document.getElementById('root')
 
