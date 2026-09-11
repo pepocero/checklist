@@ -7,12 +7,28 @@ setWebCrypto(webcrypto)
 const keys = await ApplicationServerKeys.generate()
 const json = await keys.toJSON()
 
+const subject = 'mailto:contacto@carlinitools.com'
+const forWrangler = {
+  VAPID_PUBLIC_KEY: json.publicKey,
+  VAPID_PRIVATE_KEY: json.privateKey,
+  VAPID_SUBJECT: subject,
+}
+
 writeFileSync(
   new URL('../.dev.vars.json', import.meta.url),
-  `${JSON.stringify(json, null, 2)}\n`,
+  `${JSON.stringify(forWrangler, null, 2)}\n`,
 )
 
-console.log('Claves VAPID generadas en worker/.dev.vars.json (no las subas al repo).')
+const dotenv = [
+  `VAPID_PUBLIC_KEY=${json.publicKey}`,
+  `VAPID_PRIVATE_KEY=${json.privateKey}`,
+  `VAPID_SUBJECT=${subject}`,
+  '',
+].join('\n')
+
+writeFileSync(new URL('../.dev.vars', import.meta.url), dotenv)
+
+console.log('Claves VAPID generadas en worker/.dev.vars y .dev.vars.json (no las subas al repo).')
 console.log('')
 console.log('Pública:')
 console.log(json.publicKey)

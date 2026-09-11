@@ -6,9 +6,13 @@ export async function sendWebPush(
   subscription: PushSubscriptionJSON,
   payload: Record<string, unknown>,
 ): Promise<{ ok: boolean; status: number; gone: boolean }> {
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
+    throw new Error('VAPID keys missing')
+  }
+
   const applicationServerKeys = await ApplicationServerKeys.fromJSON({
-    publicKey: env.VAPID_PUBLIC_KEY,
-    privateKey: env.VAPID_PRIVATE_KEY,
+    publicKey: env.VAPID_PUBLIC_KEY.trim(),
+    privateKey: env.VAPID_PRIVATE_KEY.trim(),
   })
 
   const { headers, body, endpoint } = await generatePushHTTPRequest({

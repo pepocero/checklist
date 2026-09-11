@@ -26,10 +26,11 @@ async function removeSubscriptionData(
   }
 }
 
-async function processDueReminders(env: Env): Promise<number> {
+async function processDueReminders(env: Env): Promise<{ sent: number; failed: number }> {
   const now = Date.now()
   const listed = await env.REMINDERS.list({ prefix: 'rem:' })
   let sent = 0
+  let failed = 0
 
   for (const entry of listed.keys) {
     const raw = await env.REMINDERS.get(entry.name)
@@ -49,26 +50,36 @@ async function processDueReminders(env: Env): Promise<number> {
       continue
     }
 
-    const result = await sendWebPush(env, reminder.subscription, {
-      title: 'Recordatorio de tarea',
-      body: reminder.text,
-      url: `/lista/${reminder.listId}`,
-      taskId: reminder.taskId,
-      listId: reminder.listId,
-    })
+    try {
+      const result = await sendWebPush(env, reminder.subscription, {
+        title: 'Recordatorio de tarea',
+        body: reminder.text,
+        url: `/lista/${reminder.listId}`,
+        taskId: reminder.taskId,
+        listId: reminder.listId,
+      })
 
-    await env.REMINDERS.delete(entry.name)
+      if (result.gone) {
+        await env.REMINDERS.delete(entry.name)
+        await removeSubscriptionData(env, reminder.subscription.endpoint)
+        continue
+      }
 
-    if (result.gone) {
-      await removeSubscriptionData(env, reminder.subscription.endpoint)
-    }
+      if (!result.ok) {
+        failed += 1
+        console.error('Push failed', entry.name, result.status)
+        continue
+      }
 
-    if (result.ok) {
+      await env.REMINDERS.delete(entry.name)
       sent += 1
+    } catch (cause) {
+      failed += 1
+      console.error('Push error', entry.name, cause)
     }
   }
 
-  return sent
+  return { sent, failed }
 }
 
 async function handleRequest(request: Request, env: Env): Promise<Response> {
@@ -79,10 +90,18 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
 
   if (request.method === 'GET' && url.pathname === '/health') {
+    const listed = await env.REMINDERS.list({ prefix: 'rem:' })
     return jsonResponse(request, {
       ok: true,
       pushConfigured: Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY),
+      pendingReminders: listed.keys.length,
     })
+  }
+
+  // Disparo manual del mismo proceso que el cron (útil tras deploy / diagnóstico).
+  if (request.method === 'POST' && url.pathname === '/process-due') {
+    const result = await processDueReminders(env)
+    return jsonResponse(request, { ok: true, ...result })
   }
 
   if (request.method === 'GET' && url.pathname === '/vapid-public-key') {
@@ -188,12 +207,14 @@ export default {
   async scheduled(
     _controller: ScheduledController,
     env: Env,
-    ctx: ExecutionContext,
+    _ctx: ExecutionContext,
   ): Promise<void> {
-    ctx.waitUntil(
-      processDueReminders(env).then((sent) => {
-        console.log(`Reminders sent: ${sent}`)
-      }),
-    )
+    try {
+      const result = await processDueReminders(env)
+      console.log(`Reminders sent: ${result.sent}, failed: ${result.failed}`)
+    } catch (cause) {
+      console.error('Scheduled reminder processing failed', cause)
+      throw cause
+    }
   },
 }

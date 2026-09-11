@@ -699,6 +699,10 @@ textarea:focus-visible {
   color: #0284c7;
 }
 
+.note-btn.has-reminder svg {
+  fill: currentColor;
+}
+
 .note-btn.has-reminder:hover,
 .note-btn.has-reminder:focus-visible {
   color: #0284c7;
