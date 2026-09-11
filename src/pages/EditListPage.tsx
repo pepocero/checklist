@@ -362,14 +362,10 @@ export function EditListPage() {
       const updated = await updateTaskReminder(reminderTask.id, reminderAt)
       setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)))
 
-      try {
-        if (reminderAt === null) {
-          await cancelTaskReminderSchedule(updated.id)
-        } else {
-          await scheduleTaskReminder(updated)
-        }
-      } catch {
-        // El recordatorio ya está guardado; el aviso se reprograma al sincronizar.
+      if (reminderAt === null) {
+        await cancelTaskReminderSchedule(updated.id)
+      } else {
+        await scheduleTaskReminder(updated)
       }
 
       setReminderTask(null)

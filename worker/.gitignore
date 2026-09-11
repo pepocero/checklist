@@ -1,0 +1,4 @@
+# Generated locally — never commit
+.dev.vars
+.dev.vars.json
+.wrangler/

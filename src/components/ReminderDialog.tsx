@@ -103,9 +103,8 @@ export function ReminderDialog({
               />
             </label>
             <p className="field-hint">
-              Recibirás una notificación en este dispositivo a esa hora. Mantén la app instalada y,
-              si puedes, ábrela de vez en cuando: el sistema puede pausar avisos con la app
-              completamente cerrada.
+              El aviso llega aunque cierres la app (notificación push). En este dispositivo debes
+              permitir notificaciones. El sonido lo decide el sistema.
             </p>
             {error ? <p className="banner error">{error}</p> : null}
           </>
