@@ -7,7 +7,50 @@ import { startInstallPromptCapture } from './utils/installPrompt'
 import './index.css'
 
 startInstallPromptCapture()
-registerSW({ immediate: true })
+
+const UPDATE_CHECK_MS = 60_000
+
+const updateSW = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    // Nueva versión detectada: activar SW y recargar.
+    void updateSW(true)
+  },
+  onRegisteredSW(_swUrl, registration) {
+    if (!registration) {
+      return
+    }
+
+    const checkForUpdates = () => {
+      void registration.update().catch(() => {
+        // Ignorar fallos de red al buscar actualizaciones.
+      })
+    }
+
+    checkForUpdates()
+    window.setInterval(checkForUpdates, UPDATE_CHECK_MS)
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        checkForUpdates()
+      }
+    })
+
+    window.addEventListener('focus', checkForUpdates)
+  },
+})
+
+// Si el SW nuevo toma el control, recargar para servir assets del deploy.
+let refreshing = false
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) {
+      return
+    }
+    refreshing = true
+    window.location.reload()
+  })
+}
 
 window.setTimeout(() => {
   startReminderSync()

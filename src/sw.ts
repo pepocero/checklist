@@ -1,10 +1,20 @@
 /// <reference lib="webworker" />
+import { clientsClaim } from 'workbox-core'
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching'
 
 declare let self: ServiceWorkerGlobalScope
 
 precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
+
+void self.skipWaiting()
+clientsClaim()
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING' || event.data?.type === 'SKIP_WAITING') {
+    void self.skipWaiting()
+  }
+})
 
 self.addEventListener('fetch', (event) => {
   if (event.request.mode !== 'navigate') {
