@@ -8,9 +8,11 @@ import { ChecklistProgress } from '../components/ChecklistProgress'
 import { CompletionDialog } from '../components/CompletionDialog'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { NoteDialog } from '../components/NoteDialog'
+import { ReminderDialog } from '../components/ReminderDialog'
 import { useChecklist } from '../hooks/useChecklist'
 import type { Task } from '../types'
 import { getTaskNote } from '../utils/taskNote'
+import { getTaskReminderAt } from '../utils/taskReminder'
 
 export function ChecklistPage() {
   const { id } = useParams()
@@ -32,6 +34,7 @@ export function ChecklistPage() {
   const [completionDismissed, setCompletionDismissed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [noteTask, setNoteTask] = useState<Task | null>(null)
+  const [reminderTask, setReminderTask] = useState<Task | null>(null)
 
   useEffect(() => {
     if (!isComplete) {
@@ -112,6 +115,7 @@ export function ChecklistPage() {
               task={task}
               onToggle={toggleTask}
               onOpenNote={setNoteTask}
+              onOpenReminder={setReminderTask}
             />
           ))}
         </div>
@@ -142,8 +146,16 @@ export function ChecklistPage() {
         onClose={() => setNoteTask(null)}
       />
 
+      <ReminderDialog
+        open={reminderTask !== null}
+        taskText={reminderTask?.text ?? ''}
+        reminderAt={getTaskReminderAt(reminderTask?.reminderAt)}
+        mode="view"
+        onClose={() => setReminderTask(null)}
+      />
+
       <CompletionDialog
-        open={showCompletion && !confirmReset && noteTask === null}
+        open={showCompletion && !confirmReset && noteTask === null && reminderTask === null}
         totalTasks={totalCount}
         onAccept={acceptCompletion}
         onReset={() => setConfirmReset(true)}

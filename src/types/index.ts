@@ -11,6 +11,8 @@ export interface Task {
   listId: string
   text: string
   note: string
+  /** Marca de tiempo (ms) para avisar; null si no hay recordatorio. */
+  reminderAt: number | null
   completed: boolean
   order: number
   createdAt: number

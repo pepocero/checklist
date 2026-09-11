@@ -3,7 +3,7 @@ import type { Task, TaskList, TaskListSummary } from '../types'
 import { normalizeTaskText } from '../utils/parseTasks'
 
 const DB_NAME = 'checklist-de-tareas'
-const DB_VERSION = 3
+const DB_VERSION = 4
 
 interface ChecklistSchema extends DBSchema {
   lists: {
@@ -59,6 +59,7 @@ export function getDatabase(): Promise<IDBPDatabase<ChecklistSchema>> {
       .then(async (db) => {
         await ensureListOrders(db)
         await ensureTaskNotes(db)
+        await ensureTaskReminders(db)
         return db
       })
       .catch((cause: unknown) => {
@@ -118,6 +119,32 @@ async function ensureTaskNotes(db: IDBPDatabase<ChecklistSchema>): Promise<void>
     }
 
     await tx.store.put({ ...task, note: '' })
+  }
+
+  await tx.done
+}
+
+async function ensureTaskReminders(db: IDBPDatabase<ChecklistSchema>): Promise<void> {
+  const tx = db.transaction('tasks', 'readwrite')
+  const tasks = await tx.store.getAll()
+
+  for (const task of tasks) {
+    const hasKey = Object.prototype.hasOwnProperty.call(task, 'reminderAt')
+    const valid =
+      task.reminderAt === null ||
+      (typeof task.reminderAt === 'number' && Number.isFinite(task.reminderAt))
+
+    if (hasKey && valid) {
+      continue
+    }
+
+    await tx.store.put({
+      ...task,
+      reminderAt:
+        typeof task.reminderAt === 'number' && Number.isFinite(task.reminderAt)
+          ? task.reminderAt
+          : null,
+    })
   }
 
   await tx.done
@@ -257,6 +284,7 @@ export async function createListWithTasks(
         listId: list.id,
         text,
         note: '',
+        reminderAt: null,
         completed: false,
         order: index,
         createdAt,
@@ -419,6 +447,94 @@ export async function updateTaskNote(taskId: string, note: string): Promise<Task
   }
 }
 
+export async function updateTaskReminder(
+  taskId: string,
+  reminderAt: number | null,
+): Promise<Task> {
+  if (reminderAt !== null) {
+    if (!Number.isFinite(reminderAt)) {
+      throw new DatabaseError('La fecha del recordatorio no es válida.')
+    }
+    if (reminderAt <= Date.now() - 30_000) {
+      throw new DatabaseError('Elige una fecha y hora futuras.')
+    }
+  }
+
+  try {
+    const db = await getDatabase()
+    const tx = db.transaction(['tasks', 'lists'], 'readwrite')
+    const taskStore = tx.objectStore('tasks')
+    const current = await taskStore.get(taskId)
+
+    if (!current) {
+      throw new DatabaseError('La tarea no existe.')
+    }
+
+    const updatedAt = now()
+    const updated: Task = {
+      ...current,
+      reminderAt,
+      updatedAt,
+    }
+    await taskStore.put(updated)
+
+    const list = await tx.objectStore('lists').get(current.listId)
+    if (list) {
+      await tx.objectStore('lists').put({ ...list, updatedAt })
+    }
+
+    await tx.done
+    return updated
+  } catch (cause) {
+    if (cause instanceof DatabaseError) {
+      throw cause
+    }
+
+    throw new DatabaseError('No se pudo guardar el recordatorio.', { cause })
+  }
+}
+
+export async function getTasksWithReminders(): Promise<Task[]> {
+  try {
+    const db = await getDatabase()
+    const tasks = await db.getAll('tasks')
+    return tasks.filter(
+      (task) => typeof task.reminderAt === 'number' && Number.isFinite(task.reminderAt),
+    )
+  } catch (cause) {
+    throw new DatabaseError('No se pudieron leer los recordatorios.', { cause })
+  }
+}
+
+export async function clearTaskReminder(taskId: string): Promise<Task | null> {
+  try {
+    const db = await getDatabase()
+    const tx = db.transaction('tasks', 'readwrite')
+    const current = await tx.store.get(taskId)
+
+    if (!current) {
+      await tx.done
+      return null
+    }
+
+    if (current.reminderAt === null) {
+      await tx.done
+      return current
+    }
+
+    const updated: Task = {
+      ...current,
+      reminderAt: null,
+      updatedAt: now(),
+    }
+    await tx.store.put(updated)
+    await tx.done
+    return updated
+  } catch (cause) {
+    throw new DatabaseError('No se pudo limpiar el recordatorio.', { cause })
+  }
+}
+
 export async function addTasksToList(listId: string, taskTexts: string[]): Promise<Task[]> {
   const texts = taskTexts.map(normalizeTaskText).filter((text) => text.length > 0)
 
@@ -444,6 +560,7 @@ export async function addTasksToList(listId: string, taskTexts: string[]): Promi
       listId,
       text,
       note: '',
+      reminderAt: null,
       completed: false,
       order: existing.length + index,
       createdAt,

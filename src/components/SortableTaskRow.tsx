@@ -1,9 +1,10 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, StickyNote, Trash2 } from 'lucide-react'
+import { GripVertical, Bell, StickyNote, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Task } from '../types'
 import { taskHasNote } from '../utils/taskNote'
+import { taskHasReminder } from '../utils/taskReminder'
 
 const DELETE_WIDTH = 76
 const OPEN_THRESHOLD = 40
@@ -18,6 +19,7 @@ interface SortableTaskRowProps {
   onRevealChange: (taskId: string, revealed: boolean) => void
   onRequestDelete: (taskId: string) => void
   onEditNote: (task: Task) => void
+  onEditReminder: (task: Task) => void
 }
 
 export function SortableTaskRow({
@@ -29,6 +31,7 @@ export function SortableTaskRow({
   onRevealChange,
   onRequestDelete,
   onEditNote,
+  onEditReminder,
 }: SortableTaskRowProps) {
   const {
     attributes,
@@ -51,6 +54,7 @@ export function SortableTaskRow({
   const originOffsetRef = useRef(0)
   const axisRef = useRef<'none' | 'horizontal' | 'vertical'>('none')
   const hasNote = taskHasNote(task.note)
+  const hasReminder = taskHasReminder(task.reminderAt)
 
   onRevealChangeRef.current = onRevealChange
 
@@ -234,6 +238,15 @@ export function SortableTaskRow({
               }
             }}
           />
+          <button
+            type="button"
+            className={`note-btn ${hasReminder ? 'has-reminder' : ''}`}
+            aria-label={hasReminder ? 'Editar recordatorio' : 'Añadir recordatorio'}
+            title={hasReminder ? 'Editar recordatorio' : 'Añadir recordatorio'}
+            onClick={() => onEditReminder(task)}
+          >
+            <Bell size={18} strokeWidth={2.1} aria-hidden="true" />
+          </button>
           <button
             type="button"
             className={`note-btn ${hasNote ? 'has-note' : ''}`}

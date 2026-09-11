@@ -20,6 +20,7 @@ import { ActionBar } from '../components/ActionBar'
 import { AppHeader } from '../components/AppHeader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { NoteDialog } from '../components/NoteDialog'
+import { ReminderDialog } from '../components/ReminderDialog'
 import { SortableTaskRow } from '../components/SortableTaskRow'
 import {
   DatabaseError,
@@ -31,8 +32,15 @@ import {
   reorderTasks,
   updateListName,
   updateTaskNote,
+  updateTaskReminder,
   updateTaskText,
 } from '../services/database'
+import {
+  ReminderError,
+  cancelTaskReminderSchedule,
+  ensureNotificationPermission,
+  scheduleTaskReminder,
+} from '../services/reminders'
 import type { Task, TaskList } from '../types'
 import { parseTaskLines } from '../utils/parseTasks'
 import {
@@ -41,6 +49,7 @@ import {
   shareListText,
 } from '../utils/shareList'
 import { getTaskNote } from '../utils/taskNote'
+import { getTaskReminderAt } from '../utils/taskReminder'
 
 export function EditListPage() {
   const { id } = useParams()
@@ -62,6 +71,9 @@ export function EditListPage() {
   const [revealedTaskIds, setRevealedTaskIds] = useState<string[]>([])
   const [noteTask, setNoteTask] = useState<Task | null>(null)
   const [noteBusy, setNoteBusy] = useState(false)
+  const [reminderTask, setReminderTask] = useState<Task | null>(null)
+  const [reminderBusy, setReminderBusy] = useState(false)
+  const [reminderError, setReminderError] = useState<string | null>(null)
   const revealedTaskIdsRef = useRef<string[]>([])
 
   useEffect(() => {
@@ -256,6 +268,9 @@ export function EditListPage() {
     setBusy(true)
     try {
       await deleteTasks(idsToDelete)
+      for (const taskId of idsToDelete) {
+        void cancelTaskReminderSchedule(taskId)
+      }
       setTasks((current) => current.filter((task) => !idsToDelete.includes(task.id)))
       setDrafts((current) => {
         const next = { ...current }
@@ -329,6 +344,44 @@ export function EditListPage() {
       showError(cause, 'No se pudo guardar la nota.')
     } finally {
       setNoteBusy(false)
+    }
+  }
+
+  async function handleSaveReminder(reminderAt: number | null) {
+    if (!reminderTask) {
+      return
+    }
+
+    setReminderBusy(true)
+    setReminderError(null)
+    try {
+      if (reminderAt !== null) {
+        await ensureNotificationPermission()
+      }
+
+      const updated = await updateTaskReminder(reminderTask.id, reminderAt)
+      setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+
+      try {
+        if (reminderAt === null) {
+          await cancelTaskReminderSchedule(updated.id)
+        } else {
+          await scheduleTaskReminder(updated)
+        }
+      } catch {
+        // El recordatorio ya está guardado; el aviso se reprograma al sincronizar.
+      }
+
+      setReminderTask(null)
+      setError(null)
+    } catch (cause) {
+      const message =
+        cause instanceof ReminderError || cause instanceof DatabaseError
+          ? cause.message
+          : 'No se pudo guardar el recordatorio.'
+      setReminderError(message)
+    } finally {
+      setReminderBusy(false)
     }
   }
 
@@ -441,6 +494,10 @@ export function EditListPage() {
                 onRevealChange={handleRevealChange}
                 onRequestDelete={handleRequestDelete}
                 onEditNote={setNoteTask}
+                onEditReminder={(task) => {
+                  setReminderError(null)
+                  setReminderTask(task)
+                }}
               />
             ))}
           </div>
@@ -491,6 +548,24 @@ export function EditListPage() {
         }}
         onSave={(note) => {
           void handleSaveNote(note)
+        }}
+      />
+
+      <ReminderDialog
+        open={reminderTask !== null}
+        taskText={reminderTask?.text ?? ''}
+        reminderAt={getTaskReminderAt(reminderTask?.reminderAt)}
+        mode="edit"
+        busy={reminderBusy}
+        error={reminderError}
+        onClose={() => {
+          if (!reminderBusy) {
+            setReminderTask(null)
+            setReminderError(null)
+          }
+        }}
+        onSave={(reminderAt) => {
+          void handleSaveReminder(reminderAt)
         }}
       />
 

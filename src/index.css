@@ -480,6 +480,12 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
+.checklist-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .checklist-item input {
   position: absolute;
   opacity: 0;
@@ -624,7 +630,7 @@ textarea:focus-visible {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 4px;
   background: #fff;
@@ -677,8 +683,26 @@ textarea:focus-visible {
   border-color: transparent;
 }
 
+.note-btn.has-reminder {
+  color: #0284c7;
+}
+
+.note-btn.has-reminder:hover,
+.note-btn.has-reminder:focus-visible {
+  color: #0284c7;
+  background: #e0f2fe;
+  border-color: transparent;
+}
+
 .checklist-item .note-btn {
   margin-top: -2px;
+}
+
+.field-hint {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .note-dialog-task {
