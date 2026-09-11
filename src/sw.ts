@@ -46,24 +46,21 @@ self.addEventListener('notificationclick', (event) => {
       })
 
       for (const client of windowClients) {
+        const windowClient = client as WindowClient
+
         try {
-          await client.focus()
+          await windowClient.focus()
         } catch {
           continue
         }
 
         // navigate() falla en dev si este SW no controla la ventana.
         try {
-          if ('navigate' in client) {
-            await client.navigate(targetUrl)
-            return
-          }
+          await windowClient.navigate(targetUrl)
         } catch {
-          client.postMessage({ type: 'CHECKLIST_NAVIGATE', url: targetPath })
-          return
+          windowClient.postMessage({ type: 'CHECKLIST_NAVIGATE', url: targetPath })
         }
 
-        client.postMessage({ type: 'CHECKLIST_NAVIGATE', url: targetPath })
         return
       }
 
