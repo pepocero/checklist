@@ -35,23 +35,36 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
   const data = event.notification.data as { url?: string } | undefined
-  const targetUrl = data?.url && typeof data.url === 'string' ? data.url : '/app'
+  const targetPath = data?.url && typeof data.url === 'string' ? data.url : '/app'
+  const targetUrl = new URL(targetPath, self.registration.scope).href
 
   event.waitUntil(
     (async () => {
-      const clients = await self.clients.matchAll({
+      const windowClients = await self.clients.matchAll({
         type: 'window',
         includeUncontrolled: true,
       })
 
-      for (const client of clients) {
-        if ('focus' in client) {
+      for (const client of windowClients) {
+        try {
           await client.focus()
+        } catch {
+          continue
+        }
+
+        // navigate() falla en dev si este SW no controla la ventana.
+        try {
           if ('navigate' in client) {
             await client.navigate(targetUrl)
+            return
           }
+        } catch {
+          client.postMessage({ type: 'CHECKLIST_NAVIGATE', url: targetPath })
           return
         }
+
+        client.postMessage({ type: 'CHECKLIST_NAVIGATE', url: targetPath })
+        return
       }
 
       await self.clients.openWindow(targetUrl)
