@@ -74,6 +74,11 @@ self.addEventListener('push', (event) => {
       icon: '/pwa-icon-192.png',
       badge: '/pwa-icon-192.png',
       tag: payload.taskId ? `task-reminder-${payload.taskId}` : 'task-reminder',
+      renotify: true,
+      requireInteraction: true,
+      silent: false,
+      vibrate: [220, 120, 220],
+      timestamp: Date.now(),
       data: {
         url,
         taskId: payload.taskId,

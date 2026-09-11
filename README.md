@@ -124,6 +124,8 @@ Para las rutas SPA, configura un rewrite a `index.html` (código `200`).
 
 Los recordatorios con la app cerrada usan un Worker de Cloudflare (`worker/`) con cron cada minuto.
 
+**Limitación Android:** Chrome no garantiza despertar el móvil en Doze. El push puede quedar retenido hasta desbloquear la pantalla. Mitigación parcial: batería de Chrome/PWA en “Sin restricciones”. Para alarmas exactas con pantalla bloqueada haría falta una app nativa.
+
 1. Crear el namespace KV:
    ```bash
    cd worker

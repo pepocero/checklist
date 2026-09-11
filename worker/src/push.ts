@@ -26,13 +26,18 @@ export async function sendWebPush(
       },
     },
     adminContact: env.VAPID_SUBJECT || 'mailto:contacto@carlinitools.com',
-    ttl: 60 * 60,
+    ttl: 60 * 60 * 24,
     urgency: 'high',
   })
 
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers,
+    headers: {
+      ...headers,
+      // Refuerzo por si el cliente de push no reenvía Urgency.
+      Urgency: 'high',
+      TTL: String(60 * 60 * 24),
+    },
     body,
   })
 

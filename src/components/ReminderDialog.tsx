@@ -103,8 +103,10 @@ export function ReminderDialog({
               />
             </label>
             <p className="field-hint">
-              El aviso llega aunque cierres la app (notificación push). En este dispositivo debes
-              permitir notificaciones. El sonido lo decide el sistema.
+              El aviso se envía aunque cierres la app (push). En Android, con la pantalla
+              bloqueada el sistema puede retenerlo hasta que desbloquees: es una limitación de
+              Chrome, no de la app. Mejora si Chrome/la PWA tienen batería “Sin restricciones”.
+              El sonido lo decide el sistema.
             </p>
             {error ? <p className="banner error">{error}</p> : null}
           </>
