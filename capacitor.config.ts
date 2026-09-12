@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.carlinitools.checklist',
-  appName: 'CheckList',
+  appName: 'Checklist',
   webDir: 'dist',
   server: {
     androidScheme: 'https',
