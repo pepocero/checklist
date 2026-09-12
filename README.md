@@ -122,7 +122,7 @@ Para las rutas SPA, configura un rewrite a `index.html` (código `200`).
 
 ### Recordatorios
 
-Los avisos se añaden al **calendario del dispositivo** (archivo `.ics`). El sistema notifica a la hora aunque la app esté cerrada. Al programar un recordatorio se abre el flujo de calendario; desde la vista de la tarea también puedes pulsar el botón de calendario.
+Los avisos se añaden al **calendario** (Google Calendar, con el evento ya rellenado). El sistema notifica a la hora aunque la app esté cerrada. Confirma el evento al abrirse el calendario.
 
 ---
 

@@ -107,8 +107,8 @@ export function ReminderDialog({
               />
             </label>
             <p className="field-hint">
-              En el ordenador se abre Google Calendar para confirmar el evento. En el móvil se
-              usa el calendario del sistema (archivo .ics), que avisa aunque la app esté cerrada.
+              Al programar se abre el calendario con el evento ya rellenado. Confírmalo para
+              que el aviso llegue aunque la app esté cerrada.
             </p>
             {error ? <p className="banner error">{error}</p> : null}
           </>
