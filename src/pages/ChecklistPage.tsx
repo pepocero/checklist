@@ -13,6 +13,7 @@ import { useChecklist } from '../hooks/useChecklist'
 import type { Task } from '../types'
 import { getTaskNote } from '../utils/taskNote'
 import { getTaskReminderAt } from '../utils/taskReminder'
+import { addTaskReminderToCalendar } from '../utils/calendarReminder'
 
 export function ChecklistPage() {
   const { id } = useParams()
@@ -35,6 +36,7 @@ export function ChecklistPage() {
   const [busy, setBusy] = useState(false)
   const [noteTask, setNoteTask] = useState<Task | null>(null)
   const [reminderTask, setReminderTask] = useState<Task | null>(null)
+  const [calendarBusy, setCalendarBusy] = useState(false)
 
   useEffect(() => {
     if (!isComplete) {
@@ -151,6 +153,23 @@ export function ChecklistPage() {
         taskText={reminderTask?.text ?? ''}
         reminderAt={getTaskReminderAt(reminderTask?.reminderAt)}
         mode="view"
+        calendarBusy={calendarBusy}
+        onAddToCalendar={() => {
+          if (!reminderTask) {
+            return
+          }
+          setCalendarBusy(true)
+          void addTaskReminderToCalendar({
+            task: reminderTask,
+            listName: list?.name,
+          })
+            .catch(() => {
+              // El usuario puede cancelar el share; no bloquear la UI.
+            })
+            .finally(() => {
+              setCalendarBusy(false)
+            })
+        }}
         onClose={() => setReminderTask(null)}
       />
 

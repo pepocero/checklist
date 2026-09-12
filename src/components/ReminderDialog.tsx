@@ -1,4 +1,4 @@
-import { Bell, BellOff, Check, X } from 'lucide-react'
+import { Bell, BellOff, CalendarPlus, Check, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import {
   defaultReminderLocalValue,
@@ -14,7 +14,9 @@ interface ReminderDialogProps {
   mode: 'edit' | 'view'
   busy?: boolean
   error?: string | null
+  calendarBusy?: boolean
   onSave?: (reminderAt: number | null) => void
+  onAddToCalendar?: () => void
   onClose: () => void
 }
 
@@ -25,7 +27,9 @@ export function ReminderDialog({
   mode,
   busy = false,
   error = null,
+  calendarBusy = false,
   onSave,
+  onAddToCalendar,
   onClose,
 }: ReminderDialogProps) {
   const titleId = useId()
@@ -103,15 +107,20 @@ export function ReminderDialog({
               />
             </label>
             <p className="field-hint">
-              El aviso se envía aunque cierres la app (push). En Android, con la pantalla
-              bloqueada el sistema puede retenerlo hasta que desbloquees: es una limitación de
-              Chrome, no de la app. Mejora si Chrome/la PWA tienen batería “Sin restricciones”.
-              El sonido lo decide el sistema.
+              Al programar se abrirá tu calendario para añadir el aviso. Así llega aunque la
+              app esté cerrada y el móvil bloqueado. Confirma el evento en el calendario.
             </p>
             {error ? <p className="banner error">{error}</p> : null}
           </>
         ) : reminderAt !== null ? (
-          <p className="note-dialog-body">{formatReminderDateTime(reminderAt)}</p>
+          <>
+            <p className="note-dialog-body">{formatReminderDateTime(reminderAt)}</p>
+            {onAddToCalendar ? (
+              <p className="field-hint">
+                Si aún no está en el calendario, añádelo para recibir el aviso del sistema.
+              </p>
+            ) : null}
+          </>
         ) : (
           <p className="note-dialog-body">No hay recordatorio.</p>
         )}
@@ -121,6 +130,17 @@ export function ReminderDialog({
             <X size={18} strokeWidth={2.2} aria-hidden="true" />
             <span>{mode === 'edit' ? 'Cancelar' : 'Cerrar'}</span>
           </button>
+          {mode === 'view' && reminderAt !== null && onAddToCalendar ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={calendarBusy}
+              onClick={onAddToCalendar}
+            >
+              <CalendarPlus size={18} strokeWidth={2.2} aria-hidden="true" />
+              <span>{calendarBusy ? 'Abriendo…' : 'Calendario'}</span>
+            </button>
+          ) : null}
           {mode === 'edit' && onSave ? (
             <>
               {reminderAt !== null ? (

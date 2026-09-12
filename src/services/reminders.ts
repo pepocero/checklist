@@ -4,12 +4,6 @@ import {
 } from './database'
 import type { Task } from '../types'
 import { getTaskReminderAt } from '../utils/taskReminder'
-import {
-  fetchVapidPublicKey,
-  getPushApiBase,
-  pushApiConfigured,
-  urlBase64ToUint8Array,
-} from '../config/push'
 
 const timers = new Map<string, number>()
 const MAX_TIMEOUT_MS = 2_147_000_000
@@ -24,14 +18,6 @@ export class ReminderError extends Error {
 
 export function notificationsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window
-}
-
-export function pushSupported(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    'serviceWorker' in navigator &&
-    'PushManager' in window
-  )
 }
 
 export function getNotificationPermission(): NotificationPermission | 'unsupported' {
@@ -150,105 +136,6 @@ function clearScheduledTimer(taskId: string): void {
   }
 }
 
-async function getPushSubscription(): Promise<PushSubscription | null> {
-  const registration = await getServiceWorkerRegistration()
-  if (!registration) {
-    return null
-  }
-
-  return registration.pushManager.getSubscription()
-}
-
-export async function ensurePushSubscription(): Promise<PushSubscription> {
-  if (!pushSupported()) {
-    throw new ReminderError('Este dispositivo no admite notificaciones push.')
-  }
-
-  if (!pushApiConfigured()) {
-    throw new ReminderError(
-      'Las notificaciones en segundo plano no están configuradas en este entorno.',
-    )
-  }
-
-  await ensureNotificationPermission()
-
-  const registration = await getServiceWorkerRegistration()
-  if (!registration) {
-    throw new ReminderError('El service worker no está listo. Recarga la app e inténtalo de nuevo.')
-  }
-
-  let subscription = await registration.pushManager.getSubscription()
-  if (!subscription) {
-    const publicKey = await fetchVapidPublicKey()
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    })
-  }
-
-  const base = getPushApiBase()
-  const response = await fetch(`${base}/subscribe`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ subscription: subscription.toJSON() }),
-  })
-
-  if (!response.ok) {
-    throw new ReminderError('No se pudo registrar este dispositivo para avisos en segundo plano.')
-  }
-
-  return subscription
-}
-
-async function scheduleRemoteReminder(task: Task): Promise<void> {
-  const reminderAt = getTaskReminderAt(task.reminderAt)
-  if (reminderAt === null || !pushApiConfigured()) {
-    return
-  }
-
-  const subscription = await ensurePushSubscription()
-  const base = getPushApiBase()
-  const response = await fetch(`${base}/reminders`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      taskId: task.id,
-      listId: task.listId,
-      text: task.text,
-      reminderAt,
-      subscription: subscription.toJSON(),
-    }),
-  })
-
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null
-    throw new ReminderError(
-      payload?.error ?? 'No se pudo programar el aviso en segundo plano.',
-    )
-  }
-}
-
-async function cancelRemoteReminder(taskId: string): Promise<void> {
-  if (!pushApiConfigured()) {
-    return
-  }
-
-  const subscription = await getPushSubscription()
-  if (!subscription) {
-    return
-  }
-
-  const base = getPushApiBase()
-  await fetch(`${base}/reminders`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      taskId,
-      endpoint: subscription.endpoint,
-    }),
-  }).catch(() => undefined)
-}
-
 export async function cancelTaskReminderSchedule(taskId: string): Promise<void> {
   clearScheduledTimer(taskId)
   try {
@@ -256,9 +143,9 @@ export async function cancelTaskReminderSchedule(taskId: string): Promise<void> 
   } catch {
     // Ignorar si el service worker no está listo.
   }
-  await cancelRemoteReminder(taskId)
 }
 
+/** Temporizador local solo mientras la app está abierta. El aviso fiable es el del calendario. */
 export async function scheduleTaskReminder(task: Task): Promise<void> {
   clearScheduledTimer(task.id)
 
@@ -267,26 +154,14 @@ export async function scheduleTaskReminder(task: Task): Promise<void> {
     return
   }
 
-  if (Notification.permission !== 'granted') {
+  if (!notificationsSupported() || Notification.permission !== 'granted') {
     return
   }
 
   void cancelBrowserNotification(task.id).catch(() => undefined)
 
-  // Aviso en segundo plano (app cerrada) vía Cloudflare Worker + Web Push.
-  if (pushApiConfigured() && pushSupported()) {
-    await scheduleRemoteReminder(task)
-  }
-
-  // Respaldo local mientras la app sigue abierta.
   const delay = reminderAt - Date.now()
   if (delay <= 0) {
-    // Si el push en segundo plano ya debió enviarse, solo limpiar local.
-    if (pushApiConfigured() && delay < -120_000) {
-      clearScheduledTimer(task.id)
-      await clearTaskReminder(task.id)
-      return
-    }
     await showTaskReminderNotification(task)
     return
   }
@@ -339,7 +214,7 @@ export async function syncAllTaskReminders(): Promise<void> {
     try {
       await scheduleTaskReminder(task)
     } catch {
-      // Continuar con el resto si uno falla (p. ej. sin API push).
+      // Continuar con el resto.
     }
   }
 }

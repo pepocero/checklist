@@ -41,53 +41,6 @@ self.addEventListener('fetch', (event) => {
   )
 })
 
-self.addEventListener('push', (event) => {
-  let payload: {
-    title?: string
-    body?: string
-    url?: string
-    taskId?: string
-    listId?: string
-  } = {}
-
-  try {
-    payload = event.data ? (event.data.json() as typeof payload) : {}
-  } catch {
-    payload = {
-      title: 'Recordatorio de tarea',
-      body: event.data?.text() ?? 'Tienes una tarea pendiente',
-    }
-  }
-
-  const title = payload.title ?? 'Recordatorio de tarea'
-  const body = payload.body ?? 'Tienes una tarea pendiente'
-  const url =
-    typeof payload.url === 'string' && payload.url.length > 0
-      ? payload.url
-      : payload.listId
-        ? `/lista/${payload.listId}`
-        : '/app'
-
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon: '/pwa-icon-192.png',
-      badge: '/pwa-icon-192.png',
-      tag: payload.taskId ? `task-reminder-${payload.taskId}` : 'task-reminder',
-      renotify: true,
-      requireInteraction: true,
-      silent: false,
-      vibrate: [220, 120, 220],
-      timestamp: Date.now(),
-      data: {
-        url,
-        taskId: payload.taskId,
-        listId: payload.listId,
-      },
-    }),
-  )
-})
-
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 

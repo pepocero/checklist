@@ -38,9 +38,9 @@ import {
 import {
   ReminderError,
   cancelTaskReminderSchedule,
-  ensureNotificationPermission,
   scheduleTaskReminder,
 } from '../services/reminders'
+import { addTaskReminderToCalendar } from '../utils/calendarReminder'
 import type { Task, TaskList } from '../types'
 import { parseTaskLines } from '../utils/parseTasks'
 import {
@@ -355,10 +355,6 @@ export function EditListPage() {
     setReminderBusy(true)
     setReminderError(null)
     try {
-      if (reminderAt !== null) {
-        await ensureNotificationPermission()
-      }
-
       const updated = await updateTaskReminder(reminderTask.id, reminderAt)
       setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)))
 
@@ -366,6 +362,10 @@ export function EditListPage() {
         await cancelTaskReminderSchedule(updated.id)
       } else {
         await scheduleTaskReminder(updated)
+        await addTaskReminderToCalendar({
+          task: updated,
+          listName: list?.name,
+        })
       }
 
       setReminderTask(null)

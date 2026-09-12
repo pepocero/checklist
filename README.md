@@ -120,49 +120,15 @@ npm run preview
 
 Para las rutas SPA, configura un rewrite a `index.html` (código `200`).
 
-### Notificaciones en segundo plano (Web Push)
+### Recordatorios
 
-Los recordatorios con la app cerrada usan un Worker de Cloudflare (`worker/`) con cron cada minuto.
-
-**Limitación Android:** Chrome no garantiza despertar el móvil en Doze. El push puede quedar retenido hasta desbloquear la pantalla. Mitigación parcial: batería de Chrome/PWA en “Sin restricciones”. Para alarmas exactas con pantalla bloqueada haría falta una app nativa.
-
-1. Crear el namespace KV:
-   ```bash
-   cd worker
-   npx wrangler kv namespace create REMINDERS
-   ```
-   Copia el `id` en `worker/wrangler.jsonc`.
-
-2. Generar claves VAPID:
-   ```bash
-   cd worker
-   npm run vapid
-   ```
-
-3. Guardar secretos del Worker:
-   ```bash
-   npx wrangler secret put VAPID_PUBLIC_KEY
-   npx wrangler secret put VAPID_PRIVATE_KEY
-   ```
-
-4. Desplegar el Worker:
-   ```bash
-   npx wrangler deploy
-   ```
-
-5. En Cloudflare Pages → Settings → Environment variables:
-   - `VITE_PUSH_API_URL` = URL del Worker (ej. `https://checklist-reminders.xxx.workers.dev`)
-   - `VITE_VAPID_PUBLIC_KEY` = clave pública generada
-
-6. Vuelve a desplegar Pages para que el frontend tome las variables.
-
-En local, crea `.env` en la raíz del proyecto con esas mismas variables.
+Los avisos se añaden al **calendario del dispositivo** (archivo `.ics`). El sistema notifica a la hora aunque la app esté cerrada. Al programar un recordatorio se abre el flujo de calendario; desde la vista de la tarea también puedes pulsar el botón de calendario.
 
 ---
 
 ## Stack
 
-React · TypeScript · Vite · IndexedDB · PWA · React Router · @dnd-kit · Cloudflare Workers (Web Push)
+React · TypeScript · Vite · IndexedDB · PWA · React Router · @dnd-kit
 
 ---
 
