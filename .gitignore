@@ -14,6 +14,16 @@ dist-ssr
 .env.*
 !.env.example
 
+# Capacitor / Android
+android/app/build
+android/build
+android/.gradle
+android/local.properties
+android/captures
+android/.idea
+*.keystore
+*.jks
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

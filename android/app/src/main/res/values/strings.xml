@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CheckList</string>
+    <string name="title_activity_main">CheckList</string>
+    <string name="package_name">com.carlinitools.checklist</string>
+    <string name="custom_url_scheme">com.carlinitools.checklist</string>
+</resources>

@@ -122,13 +122,28 @@ Para las rutas SPA, configura un rewrite a `index.html` (código `200`).
 
 ### Recordatorios
 
-Los avisos se añaden al **calendario** (Google Calendar, con el evento ya rellenado). El sistema notifica a la hora aunque la app esté cerrada. Confirma el evento al abrirse el calendario.
+- **App Android (Capacitor):** notificación local nativa. Se programa sin abrir el calendario y funciona con la app cerrada.
+- **Navegador / PWA:** se abre Google Calendar con el evento rellenado para confirmarlo.
+
+### App Android (Capacitor)
+
+```bash
+npm run android
+```
+
+Abre Android Studio. La primera vez concede permiso de notificaciones al programar un aviso. Requiere JDK y Android Studio instalados.
+
+Tras cambiar el frontend:
+
+```bash
+npm run cap:sync
+```
 
 ---
 
 ## Stack
 
-React · TypeScript · Vite · IndexedDB · PWA · React Router · @dnd-kit
+React · TypeScript · Vite · IndexedDB · PWA · Capacitor (Android) · React Router · @dnd-kit
 
 ---
 

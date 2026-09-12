@@ -1,5 +1,6 @@
 import { Bell, BellOff, CalendarPlus, Check, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import {
   defaultReminderLocalValue,
   formatReminderDateTime,
@@ -107,8 +108,9 @@ export function ReminderDialog({
               />
             </label>
             <p className="field-hint">
-              Al programar se abre el calendario con el evento ya rellenado. Confírmalo para
-              que el aviso llegue aunque la app esté cerrada.
+              {Capacitor.isNativePlatform()
+                ? 'El aviso se programa en el sistema. Llega aunque la app esté cerrada y el móvil bloqueado.'
+                : 'En el navegador se abre el calendario para confirmar el evento. En la app Android el aviso es automático.'}
             </p>
             {error ? <p className="banner error">{error}</p> : null}
           </>
@@ -118,6 +120,10 @@ export function ReminderDialog({
             {onAddToCalendar ? (
               <p className="field-hint">
                 Si aún no está en el calendario, añádelo para recibir el aviso del sistema.
+              </p>
+            ) : Capacitor.isNativePlatform() ? (
+              <p className="field-hint">
+                El aviso nativo ya está programado en este dispositivo.
               </p>
             ) : null}
           </>

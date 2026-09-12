@@ -40,6 +40,7 @@ import {
   cancelTaskReminderSchedule,
   scheduleTaskReminder,
 } from '../services/reminders'
+import { isNativeApp } from '../services/nativeReminders'
 import { addTaskReminderToCalendar } from '../utils/calendarReminder'
 import type { Task, TaskList } from '../types'
 import { parseTaskLines } from '../utils/parseTasks'
@@ -362,10 +363,12 @@ export function EditListPage() {
         await cancelTaskReminderSchedule(updated.id)
       } else {
         await scheduleTaskReminder(updated)
-        await addTaskReminderToCalendar({
-          task: updated,
-          listName: list?.name,
-        })
+        if (!isNativeApp()) {
+          await addTaskReminderToCalendar({
+            task: updated,
+            listName: list?.name,
+          })
+        }
       }
 
       setReminderTask(null)

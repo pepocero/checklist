@@ -4,23 +4,32 @@ import {
 } from './database'
 import type { Task } from '../types'
 import { getTaskReminderAt } from '../utils/taskReminder'
+import { ReminderError } from './reminderError'
+import {
+  cancelNativeTaskReminder,
+  ensureNativeNotificationPermission,
+  isNativeApp,
+  scheduleNativeTaskReminder,
+  startNativeReminderListeners,
+} from './nativeReminders'
+
+export { ReminderError } from './reminderError'
 
 const timers = new Map<string, number>()
 const MAX_TIMEOUT_MS = 2_147_000_000
 const SW_READY_TIMEOUT_MS = 1500
 
-export class ReminderError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options)
-    this.name = 'ReminderError'
-  }
-}
-
 export function notificationsSupported(): boolean {
+  if (isNativeApp()) {
+    return true
+  }
   return typeof window !== 'undefined' && 'Notification' in window
 }
 
 export function getNotificationPermission(): NotificationPermission | 'unsupported' {
+  if (isNativeApp()) {
+    return 'granted'
+  }
   if (!notificationsSupported()) {
     return 'unsupported'
   }
@@ -28,6 +37,11 @@ export function getNotificationPermission(): NotificationPermission | 'unsupport
 }
 
 export async function ensureNotificationPermission(): Promise<NotificationPermission> {
+  if (isNativeApp()) {
+    await ensureNativeNotificationPermission()
+    return 'granted'
+  }
+
   if (!notificationsSupported()) {
     throw new ReminderError('Este dispositivo no admite notificaciones.')
   }
@@ -55,7 +69,7 @@ function reminderTag(taskId: string): string {
 }
 
 async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
-  if (!('serviceWorker' in navigator)) {
+  if (!('serviceWorker' in navigator) || isNativeApp()) {
     return null
   }
 
@@ -143,14 +157,28 @@ export async function cancelTaskReminderSchedule(taskId: string): Promise<void> 
   } catch {
     // Ignorar si el service worker no está listo.
   }
+  try {
+    await cancelNativeTaskReminder(taskId)
+  } catch {
+    // Ignorar si el plugin nativo no está listo.
+  }
 }
 
-/** Temporizador local solo mientras la app está abierta. El aviso fiable es el del calendario. */
+/**
+ * Programa el aviso:
+ * - App Android (Capacitor): notificación local nativa (funciona con la app cerrada).
+ * - Web: temporizador solo mientras la página sigue abierta.
+ */
 export async function scheduleTaskReminder(task: Task): Promise<void> {
   clearScheduledTimer(task.id)
 
   const reminderAt = getTaskReminderAt(task.reminderAt)
   if (reminderAt === null) {
+    return
+  }
+
+  if (isNativeApp()) {
+    await scheduleNativeTaskReminder(task)
     return
   }
 
@@ -197,6 +225,18 @@ export async function scheduleTaskReminder(task: Task): Promise<void> {
 }
 
 export async function syncAllTaskReminders(): Promise<void> {
+  if (isNativeApp()) {
+    const tasks = await getTasksWithReminders()
+    for (const task of tasks) {
+      try {
+        await scheduleNativeTaskReminder(task)
+      } catch {
+        // Continuar con el resto.
+      }
+    }
+    return
+  }
+
   if (!notificationsSupported() || Notification.permission !== 'granted') {
     return
   }
@@ -227,6 +267,7 @@ export function startReminderSync(): void {
   }
 
   syncStarted = true
+  startNativeReminderListeners()
 
   const run = () => {
     void syncAllTaskReminders().catch(() => {

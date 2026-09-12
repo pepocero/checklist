@@ -1,6 +1,7 @@
 import { ArrowLeft, Pencil, RotateCcw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Capacitor } from '@capacitor/core'
 import { ActionBar } from '../components/ActionBar'
 import { AppHeader } from '../components/AppHeader'
 import { ChecklistItem } from '../components/ChecklistItem'
@@ -154,22 +155,26 @@ export function ChecklistPage() {
         reminderAt={getTaskReminderAt(reminderTask?.reminderAt)}
         mode="view"
         calendarBusy={calendarBusy}
-        onAddToCalendar={() => {
-          if (!reminderTask) {
-            return
-          }
-          setCalendarBusy(true)
-          void addTaskReminderToCalendar({
-            task: reminderTask,
-            listName: list?.name,
-          })
-            .catch(() => {
-              // El usuario puede cancelar el share; no bloquear la UI.
-            })
-            .finally(() => {
-              setCalendarBusy(false)
-            })
-        }}
+        onAddToCalendar={
+          Capacitor.isNativePlatform()
+            ? undefined
+            : () => {
+                if (!reminderTask) {
+                  return
+                }
+                setCalendarBusy(true)
+                void addTaskReminderToCalendar({
+                  task: reminderTask,
+                  listName: list?.name,
+                })
+                  .catch(() => {
+                    // El usuario puede cancelar; no bloquear la UI.
+                  })
+                  .finally(() => {
+                    setCalendarBusy(false)
+                  })
+              }
+        }
         onClose={() => setReminderTask(null)}
       />
 

@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
@@ -8,48 +9,50 @@ import './index.css'
 
 startInstallPromptCapture()
 
-const UPDATE_CHECK_MS = 60_000
+const isNative = Capacitor.isNativePlatform()
 
-const updateSW = registerSW({
-  immediate: true,
-  onNeedRefresh() {
-    // Nueva versión detectada: activar SW y recargar.
-    void updateSW(true)
-  },
-  onRegisteredSW(_swUrl, registration) {
-    if (!registration) {
-      return
-    }
+if (!isNative) {
+  const UPDATE_CHECK_MS = 60_000
 
-    const checkForUpdates = () => {
-      void registration.update().catch(() => {
-        // Ignorar fallos de red al buscar actualizaciones.
-      })
-    }
-
-    checkForUpdates()
-    window.setInterval(checkForUpdates, UPDATE_CHECK_MS)
-
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        checkForUpdates()
+  const updateSW = registerSW({
+    immediate: true,
+    onNeedRefresh() {
+      void updateSW(true)
+    },
+    onRegisteredSW(_swUrl, registration) {
+      if (!registration) {
+        return
       }
-    })
 
-    window.addEventListener('focus', checkForUpdates)
-  },
-})
+      const checkForUpdates = () => {
+        void registration.update().catch(() => {
+          // Ignorar fallos de red al buscar actualizaciones.
+        })
+      }
 
-// Si el SW nuevo toma el control, recargar para servir assets del deploy.
-let refreshing = false
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (refreshing) {
-      return
-    }
-    refreshing = true
-    window.location.reload()
+      checkForUpdates()
+      window.setInterval(checkForUpdates, UPDATE_CHECK_MS)
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          checkForUpdates()
+        }
+      })
+
+      window.addEventListener('focus', checkForUpdates)
+    },
   })
+
+  let refreshing = false
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) {
+        return
+      }
+      refreshing = true
+      window.location.reload()
+    })
+  }
 }
 
 window.setTimeout(() => {
