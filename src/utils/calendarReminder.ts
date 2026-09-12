@@ -37,7 +37,7 @@ function isLikelyMobileDevice(): boolean {
   return navigator.maxTouchPoints > 0 && window.matchMedia('(max-width: 900px)').matches
 }
 
-function buildEventDescription(task: Task, listName?: string, appUrl?: string): string {
+function buildEventDescription(listName?: string, appUrl?: string): string {
   return [listName?.trim() ? `Lista: ${listName.trim()}` : null, 'Recordatorio de CheckList', appUrl ?? null]
     .filter(Boolean)
     .join('\n')
@@ -57,7 +57,7 @@ export function buildGoogleCalendarUrl(input: {
     action: 'TEMPLATE',
     text: input.task.text.trim() || 'Tarea pendiente',
     dates: `${toGoogleUtcDateTime(reminderAt)}/${toGoogleUtcDateTime(reminderAt + EVENT_DURATION_MS)}`,
-    details: buildEventDescription(input.task, input.listName, input.appUrl),
+    details: buildEventDescription(input.listName, input.appUrl),
   })
 
   return `https://calendar.google.com/calendar/render?${params.toString()}`
@@ -103,7 +103,7 @@ export function buildTaskReminderIcs(input: {
   const end = toIcsLocalDateTime(reminderAt + EVENT_DURATION_MS)
   const summary = escapeIcsText(input.task.text.trim() || 'Tarea pendiente')
   const description = escapeIcsText(
-    buildEventDescription(input.task, input.listName, input.appUrl),
+    buildEventDescription(input.listName, input.appUrl),
   )
   const uid = `task-${input.task.id}@checklist.carlinitools.com`
 
