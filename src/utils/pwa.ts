@@ -1,8 +1,15 @@
+import { Capacitor } from '@capacitor/core'
+
 const STANDALONE_MQ = '(display-mode: standalone)'
 
 export function isRunningAsInstalledPwa(): boolean {
   if (typeof window === 'undefined') {
     return false
+  }
+
+  // App nativa (Capacitor): ya está instalada; no mostrar prompts de PWA.
+  if (Capacitor.isNativePlatform()) {
+    return true
   }
 
   const mediaStandalone = window.matchMedia(STANDALONE_MQ).matches

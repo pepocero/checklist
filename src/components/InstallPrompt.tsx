@@ -1,5 +1,6 @@
 import { Download, Share, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import {
   clearDeferredInstallPrompt,
   getDeferredInstallPrompt,
@@ -33,7 +34,7 @@ export function InstallPrompt() {
     return subscribeInstallPrompt(sync)
   }, [])
 
-  if (installed || dismissed) {
+  if (Capacitor.isNativePlatform() || installed || dismissed) {
     return null
   }
 
