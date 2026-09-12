@@ -107,8 +107,8 @@ export function ReminderDialog({
               />
             </label>
             <p className="field-hint">
-              Al programar se abrirá tu calendario para añadir el aviso. Así llega aunque la
-              app esté cerrada y el móvil bloqueado. Confirma el evento en el calendario.
+              En el ordenador se abre Google Calendar para confirmar el evento. En el móvil se
+              usa el calendario del sistema (archivo .ics), que avisa aunque la app esté cerrada.
             </p>
             {error ? <p className="banner error">{error}</p> : null}
           </>

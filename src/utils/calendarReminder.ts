@@ -16,6 +16,53 @@ function toIcsLocalDateTime(timestamp: number): string {
   )
 }
 
+/** UTC compacto para enlaces de Google Calendar (`YYYYMMDDTHHMMSSZ`). */
+function toGoogleUtcDateTime(timestamp: number): string {
+  const date = new Date(timestamp)
+  return (
+    `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}` +
+    `T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`
+  )
+}
+
+function isLikelyMobileDevice(): boolean {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') {
+    return false
+  }
+
+  if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    return true
+  }
+
+  return navigator.maxTouchPoints > 0 && window.matchMedia('(max-width: 900px)').matches
+}
+
+function buildEventDescription(task: Task, listName?: string, appUrl?: string): string {
+  return [listName?.trim() ? `Lista: ${listName.trim()}` : null, 'Recordatorio de CheckList', appUrl ?? null]
+    .filter(Boolean)
+    .join('\n')
+}
+
+export function buildGoogleCalendarUrl(input: {
+  task: Task
+  listName?: string
+  appUrl?: string
+}): string {
+  const reminderAt = getTaskReminderAt(input.task.reminderAt)
+  if (reminderAt === null) {
+    throw new Error('La tarea no tiene recordatorio.')
+  }
+
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: input.task.text.trim() || 'Tarea pendiente',
+    dates: `${toGoogleUtcDateTime(reminderAt)}/${toGoogleUtcDateTime(reminderAt + EVENT_DURATION_MS)}`,
+    details: buildEventDescription(input.task, input.listName, input.appUrl),
+  })
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`
+}
+
 function escapeIcsText(value: string): string {
   return value
     .replace(/\\/g, '\\\\')
@@ -55,13 +102,9 @@ export function buildTaskReminderIcs(input: {
   const start = toIcsLocalDateTime(reminderAt)
   const end = toIcsLocalDateTime(reminderAt + EVENT_DURATION_MS)
   const summary = escapeIcsText(input.task.text.trim() || 'Tarea pendiente')
-  const listLabel = input.listName?.trim()
-  const descriptionParts = [
-    listLabel ? `Lista: ${listLabel}` : null,
-    'Recordatorio de CheckList',
-    input.appUrl ?? null,
-  ].filter(Boolean)
-  const description = escapeIcsText(descriptionParts.join('\n'))
+  const description = escapeIcsText(
+    buildEventDescription(input.task, input.listName, input.appUrl),
+  )
   const uid = `task-${input.task.id}@checklist.carlinitools.com`
 
   const lines = [
@@ -128,6 +171,19 @@ export async function addTaskReminderToCalendar(input: {
       ? new URL(`/lista/${input.task.listId}`, window.location.origin).href
       : undefined
 
+  // Escritorio: abrir Google Calendar (probar sin desplegar ni usar el móvil).
+  if (!isLikelyMobileDevice()) {
+    const googleUrl = buildGoogleCalendarUrl({
+      task: input.task,
+      listName: input.listName,
+      appUrl,
+    })
+    const opened = window.open(googleUrl, '_blank', 'noopener,noreferrer')
+    if (opened) {
+      return
+    }
+  }
+
   const ics = buildTaskReminderIcs({
     task: input.task,
     listName: input.listName,
@@ -135,6 +191,7 @@ export async function addTaskReminderToCalendar(input: {
   })
   const fileName = fileNameForTask(input.task)
 
+  // Móvil: compartir / guardar .ics para el calendario nativo.
   if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
     try {
       const file = new File([ics], fileName, { type: 'text/calendar' })
