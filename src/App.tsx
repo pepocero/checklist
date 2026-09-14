@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect } from 'react'
+import { AndroidBackHandler } from './components/AndroidBackHandler'
 import { AppFooter } from './components/AppFooter'
 import { ChecklistPage } from './pages/ChecklistPage'
 import { CreateListPage } from './pages/CreateListPage'
@@ -47,6 +48,7 @@ function AppRoutes() {
     <div className={isLanding ? 'landing-shell' : 'app-shell'}>
       <div className={isLanding ? 'landing-content' : 'app-content'}>
         <ServiceWorkerNavigationBridge />
+        <AndroidBackHandler />
         <Routes>
           <Route path="/" element={<LandingEntry />} />
           <Route path="/inicio" element={<LandingPage />} />
