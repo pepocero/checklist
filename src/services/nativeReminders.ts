@@ -3,9 +3,10 @@ import { LocalNotifications } from '@capacitor/local-notifications'
 import type { Task } from '../types'
 import { getTaskReminderAt } from '../utils/taskReminder'
 import { ReminderError } from './reminderError'
-import { clearTaskReminder } from './database'
 
-const CHANNEL_ID = 'task-reminders'
+/** Canal nuevo: el anterior se creó sin sonido real de sistema (no se puede editar). */
+const CHANNEL_ID = 'task-reminders-v2'
+const LEGACY_CHANNEL_ID = 'task-reminders'
 let channelReady = false
 let listenersReady = false
 
@@ -29,13 +30,21 @@ async function ensureNotificationChannel(): Promise<void> {
     return
   }
 
+  // Quitar canal antiguo (sound: "default" apuntaba a raw/default inexistente → silencio).
+  try {
+    await LocalNotifications.deleteChannel({ id: LEGACY_CHANNEL_ID })
+  } catch {
+    // Puede no existir.
+  }
+
+  // Sin propiedad `sound`: Android usa el tono de notificación del sistema.
+  // IMPORTANCE_HIGH (5) permite heads-up + sonido.
   await LocalNotifications.createChannel({
     id: CHANNEL_ID,
     name: 'Recordatorios',
-    description: 'Avisos de tareas de CheckList',
+    description: 'Avisos de tareas de Checklist',
     importance: 5,
     visibility: 1,
-    sound: 'default',
     vibration: true,
     lights: true,
     lightColor: '#0284c7',
@@ -82,22 +91,8 @@ export async function scheduleNativeTaskReminder(task: Task): Promise<void> {
   await ensureNativeNotificationPermission()
   await cancelNativeTaskReminder(task.id)
 
+  // Ya vencido: no reprogramar ni borrar; el icono de campana se mantiene en la tarea.
   if (reminderAt <= Date.now()) {
-    await LocalNotifications.schedule({
-      notifications: [
-        {
-          id: nativeNotificationId(task.id),
-          title: 'Recordatorio de tarea',
-          body: task.text,
-          channelId: CHANNEL_ID,
-          extra: {
-            taskId: task.id,
-            listId: task.listId,
-          },
-        },
-      ],
-    })
-    await clearTaskReminder(task.id)
     return
   }
 
@@ -112,6 +107,7 @@ export async function scheduleNativeTaskReminder(task: Task): Promise<void> {
           allowWhileIdle: true,
         },
         channelId: CHANNEL_ID,
+        // Dejar que el canal defina el tono del sistema.
         extra: {
           taskId: task.id,
           listId: task.listId,
@@ -128,19 +124,9 @@ export function startNativeReminderListeners(): void {
 
   listenersReady = true
 
-  void LocalNotifications.addListener('localNotificationReceived', (notification) => {
-    const taskId = notification.extra?.taskId
-    if (typeof taskId === 'string' && taskId.length > 0) {
-      void clearTaskReminder(taskId).catch(() => undefined)
-    }
-  })
-
+  // No borrar reminderAt al disparar: el usuario debe ver que había aviso a esa hora.
   void LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
-    const taskId = action.notification.extra?.taskId
     const listId = action.notification.extra?.listId
-    if (typeof taskId === 'string' && taskId.length > 0) {
-      void clearTaskReminder(taskId).catch(() => undefined)
-    }
     if (typeof listId === 'string' && listId.length > 0) {
       window.location.hash = ''
       window.location.assign(`/lista/${listId}`)

@@ -10,7 +10,7 @@ const config: CapacitorConfig = {
   plugins: {
     LocalNotifications: {
       iconColor: '#0284c7',
-      sound: 'default',
+      // No usar "default": Android lo busca en res/raw y si no existe no hay sonido.
     },
   },
 }
