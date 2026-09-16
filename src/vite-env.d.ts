@@ -1,6 +1,10 @@
 /// <reference types="vite/client" />
 /// <reference types="vite-plugin-pwa/client" />
 
+interface ImportMetaEnv {
+  readonly VITE_GOOGLE_WEB_CLIENT_ID?: string
+}
+
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }

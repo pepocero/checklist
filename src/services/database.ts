@@ -832,3 +832,53 @@ export async function deleteList(listId: string): Promise<void> {
     throw new DatabaseError('No se pudo eliminar la lista.', { cause })
   }
 }
+
+export async function exportAllData(): Promise<{ lists: TaskList[]; tasks: Task[] }> {
+  try {
+    const db = await getDatabase()
+    const lists = await db.getAll('lists')
+    const tasks = await db.getAll('tasks')
+    return { lists, tasks }
+  } catch (cause) {
+    if (cause instanceof DatabaseError) {
+      throw cause
+    }
+
+    throw new DatabaseError('No se pudo exportar la copia de seguridad.', { cause })
+  }
+}
+
+export async function replaceAllData(lists: TaskList[], tasks: Task[]): Promise<void> {
+  try {
+    const db = await getDatabase()
+    const tx = db.transaction(['lists', 'tasks'], 'readwrite')
+    const listStore = tx.objectStore('lists')
+    const taskStore = tx.objectStore('tasks')
+
+    const existingLists = await listStore.getAllKeys()
+    for (const key of existingLists) {
+      await listStore.delete(key)
+    }
+
+    const existingTasks = await taskStore.getAllKeys()
+    for (const key of existingTasks) {
+      await taskStore.delete(key)
+    }
+
+    for (const list of lists) {
+      await listStore.put(list)
+    }
+
+    for (const task of tasks) {
+      await taskStore.put(task)
+    }
+
+    await tx.done
+  } catch (cause) {
+    if (cause instanceof DatabaseError) {
+      throw cause
+    }
+
+    throw new DatabaseError('No se pudo restaurar la copia de seguridad.', { cause })
+  }
+}

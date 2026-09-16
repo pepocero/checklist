@@ -125,6 +125,13 @@ Para las rutas SPA, configura un rewrite a `index.html` (código `200`).
 - **App Android (Capacitor):** notificación local nativa. Se programa sin abrir el calendario y funciona con la app cerrada.
 - **Navegador / PWA:** se abre Google Calendar con el evento rellenado para confirmarlo.
 
+### Copia de seguridad
+
+Desde **Mis listas**, el icono de nube abre la copia de seguridad:
+
+- **Archivo local:** exporta/importa un JSON (opcionalmente cifrado con contraseña).
+- **Google Drive:** preparado en código, pero **desactivado** de momento (`GOOGLE_DRIVE_BACKUP_ENABLED` en `src/services/googleAuth.ts`).
+
 ### App Android (Capacitor)
 
 ```bash

@@ -580,6 +580,55 @@ textarea:focus-visible {
   color: var(--danger);
 }
 
+.banner.success {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.backup-dialog {
+  width: min(480px, 100%);
+}
+
+.backup-dialog .field span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.backup-section {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.backup-section h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.backup-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.backup-actions .btn {
+  justify-content: center;
+}
+
+.backup-confirm {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--danger-soft);
+}
+
+.backup-confirm p {
+  margin: 0;
+  color: var(--danger);
+}
+
 .exit-toast {
   position: fixed;
   left: 50%;

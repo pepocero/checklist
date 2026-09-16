@@ -13,11 +13,12 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { ClipboardList, ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ClipboardList, ArrowLeft, DatabaseBackup, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ActionBar } from '../components/ActionBar'
 import { AppHeader } from '../components/AppHeader'
+import { BackupDialog } from '../components/BackupDialog'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { InstallPrompt } from '../components/InstallPrompt'
 import { SortableListCard } from '../components/SortableListCard'
@@ -25,10 +26,11 @@ import { useLists } from '../hooks/useLists'
 import type { TaskListSummary } from '../types'
 
 export function HomePage() {
-  const { lists, setLists, isReady, error, deleteList, reorderLists } = useLists()
+  const { lists, setLists, isReady, error, deleteList, reorderLists, refresh } = useLists()
   const [pendingDelete, setPendingDelete] = useState<TaskListSummary | null>(null)
   const [busy, setBusy] = useState(false)
   const [swipeCloseSignal, setSwipeCloseSignal] = useState(0)
+  const [backupOpen, setBackupOpen] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -86,11 +88,20 @@ export function HomePage() {
         homeTo="/inicio"
       />
 
-      <ActionBar ariaLabel="Crear lista">
+      <ActionBar ariaLabel="Acciones de listas">
         <Link to="/nueva" className="btn btn-primary">
           <Plus size={20} strokeWidth={2.3} aria-hidden="true" />
           <span>Nueva lista</span>
         </Link>
+        <button
+          type="button"
+          className="icon-btn solid"
+          aria-label="Copia de seguridad"
+          title="Copia de seguridad"
+          onClick={() => setBackupOpen(true)}
+        >
+          <DatabaseBackup size={20} strokeWidth={2.3} aria-hidden="true" />
+        </button>
       </ActionBar>
 
       <InstallPrompt />
@@ -165,6 +176,12 @@ export function HomePage() {
         onConfirm={() => {
           void confirmDelete()
         }}
+      />
+
+      <BackupDialog
+        open={backupOpen}
+        onClose={() => setBackupOpen(false)}
+        onRestored={() => refresh()}
       />
     </section>
   )
