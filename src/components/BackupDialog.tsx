@@ -109,7 +109,12 @@ export function BackupDialog({ open, onClose, onRestored }: BackupDialogProps) {
     try {
       const json = await buildBackupJson(password)
       const target = await saveBackupToDevice(json)
-      setSuccess(`Copia guardada: ${target}`)
+      const isFileUri = target.startsWith('file:') || target.includes('/')
+      setSuccess(
+        isFileUri
+          ? 'Copia guardada en Documentos (checklist-backup.json).'
+          : `Copia guardada: ${target}`,
+      )
     } catch (cause) {
       const message =
         cause instanceof Error ? cause.message : 'No se pudo guardar la copia.'

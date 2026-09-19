@@ -1,4 +1,11 @@
-import { ArrowRight, ClipboardCheck, Lock, RefreshCw, Share2, WifiOff } from 'lucide-react'
+import {
+  ArrowRight,
+  ClipboardCheck,
+  Lock,
+  RefreshCw,
+  Share2,
+  WifiOff,
+} from 'lucide-react'
 import { Link } from 'react-router-dom'
 import heroImage from '../assets/landing/landing-hero.png'
 import homeImage from '../assets/landing/landing-home.png'
@@ -7,6 +14,7 @@ import repetitiveImage from '../assets/landing/landing-repetitive.png'
 import resetImage from '../assets/landing/landing-reset.png'
 import shareImage from '../assets/landing/landing-share.png'
 import travelImage from '../assets/landing/landing-travel.png'
+import { PlayStoreLink } from '../components/PlayStoreLink'
 
 export function LandingPage() {
   return (
@@ -16,11 +24,18 @@ export function LandingPage() {
           <p className="landing-enter-name">CheckList</p>
           <p className="landing-enter-tag">Creador de listas de verificación</p>
         </div>
-        <Link to="/app" className="btn btn-primary landing-enter-btn">
-          <span className="landing-enter-label-full">Entrar a la app</span>
-          <span className="landing-enter-label-short">Entrar</span>
-          <ArrowRight size={18} strokeWidth={2.3} aria-hidden="true" />
-        </Link>
+        <div className="landing-enter-actions">
+          <PlayStoreLink
+            className="btn btn-ghost landing-enter-btn landing-play-btn"
+            label="Google Play"
+            shortLabel="Play"
+          />
+          <Link to="/app" className="btn btn-primary landing-enter-btn">
+            <span className="landing-enter-label-full">Entrar a la app</span>
+            <span className="landing-enter-label-short">Entrar</span>
+            <ArrowRight size={18} strokeWidth={2.3} aria-hidden="true" />
+          </Link>
+        </div>
       </div>
 
       <section className="landing-hero">
@@ -43,6 +58,7 @@ export function LandingPage() {
                 <span>Entrar a la app</span>
                 <ArrowRight size={18} strokeWidth={2.3} aria-hidden="true" />
               </Link>
+              <PlayStoreLink className="btn btn-ghost landing-play-btn-on-hero" />
             </div>
           </div>
         </div>
@@ -83,6 +99,16 @@ export function LandingPage() {
             </p>
           </article>
         </div>
+      </section>
+
+      <section className="landing-play-mid">
+        <p className="landing-kicker">App Android</p>
+        <h2>Descárgala en Google Play</h2>
+        <p>
+          Lleva tus listas en el móvil, con recordatorios nativos y sin cuentas. Disponible
+          en la Play Store.
+        </p>
+        <PlayStoreLink className="btn btn-primary" label="Descargar en Google Play" />
       </section>
 
       <section className="landing-feature">
@@ -163,10 +189,13 @@ export function LandingPage() {
         <p>
           Rápida, clara y pensada para el día a día: menos olvidos, más control.
         </p>
-        <Link to="/app" className="btn btn-primary">
-          <span>Entrar a la app</span>
-          <ArrowRight size={18} strokeWidth={2.3} aria-hidden="true" />
-        </Link>
+        <div className="landing-closing-actions">
+          <Link to="/app" className="btn btn-primary">
+            <span>Entrar a la app</span>
+            <ArrowRight size={18} strokeWidth={2.3} aria-hidden="true" />
+          </Link>
+          <PlayStoreLink className="btn btn-ghost" label="Google Play" />
+        </div>
       </section>
     </div>
   )
