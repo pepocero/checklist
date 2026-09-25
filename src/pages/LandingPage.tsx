@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  Bell,
   ClipboardCheck,
   Lock,
   RefreshCw,
@@ -10,8 +11,10 @@ import { Link } from 'react-router-dom'
 import heroImage from '../assets/landing/landing-hero.png'
 import homeImage from '../assets/landing/landing-home.png'
 import privacyImage from '../assets/landing/landing-privacy.png'
+import remindersImage from '../assets/landing/landing-reminders.png'
 import repetitiveImage from '../assets/landing/landing-repetitive.png'
 import resetImage from '../assets/landing/landing-reset.png'
+import routinesImage from '../assets/landing/landing-routines.png'
 import shareImage from '../assets/landing/landing-share.png'
 import travelImage from '../assets/landing/landing-travel.png'
 import { PlayStoreLink } from '../components/PlayStoreLink'
@@ -65,13 +68,23 @@ export function LandingPage() {
       </section>
 
       <section className="landing-section">
-        <div className="landing-section-copy">
-          <p className="landing-kicker">Para qué sirve</p>
-          <h2>Rutinas que se repiten, hechas con calma</h2>
-          <p>
-            Ideal cuando configuras ordenadores nuevos, preparas maletas, sales de casa o
-            sigues cualquier proceso que no quieres dejar a medias.
-          </p>
+        <div className="landing-feature landing-section-intro">
+          <div className="landing-feature-copy">
+            <p className="landing-kicker">Para qué sirve</p>
+            <h2>Rutinas que se repiten, hechas con calma</h2>
+            <p>
+              Ideal cuando tienes tareas repetitivas con varios pasos que cumplir. Si
+              preparas maletas, sales de casa o sigues cualquier proceso que no quieres
+              dejar a medias, montas una lista y la vas marcando: así terminas el trabajo
+              sin olvidarte de nada.
+            </p>
+          </div>
+          <div className="landing-feature-media">
+            <img
+              src={routinesImage}
+              alt="Maleta y checklist preparados para una rutina sin olvidos"
+            />
+          </div>
         </div>
         <div className="landing-uses">
           <article className="landing-use">
@@ -127,6 +140,26 @@ export function LandingPage() {
 
       <section className="landing-feature reverse">
         <div className="landing-feature-copy">
+          <Bell size={28} strokeWidth={1.8} aria-hidden="true" />
+          <h2>Campana en la tarea que no puedes olvidar</h2>
+          <p>
+            En cualquier checklist puedes marcar una tarea con una campana y programar un
+            aviso. Cuando llega el momento, el móvil muestra una notificación con el tono
+            predeterminado del teléfono. Ideal para lo que no debe pasarse por alto: ir al
+            banco en la lista de mañana, meter el cargador en la maleta o no olvidar la
+            tablet en un viaje.
+          </p>
+        </div>
+        <div className="landing-feature-media">
+          <img
+            src={remindersImage}
+            alt="Móvil con una tarea marcada con campana y una notificación de recordatorio"
+          />
+        </div>
+      </section>
+
+      <section className="landing-feature">
+        <div className="landing-feature-copy">
           <Lock size={28} strokeWidth={1.8} aria-hidden="true" />
           <h2>Privacidad real, en tu dispositivo</h2>
           <p>
@@ -139,7 +172,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="landing-feature">
+      <section className="landing-feature reverse">
         <div className="landing-feature-copy">
           <RefreshCw size={28} strokeWidth={1.8} aria-hidden="true" />
           <h2>Reinicia y vuelve a usar la misma lista</h2>
@@ -154,7 +187,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="landing-feature reverse">
+      <section className="landing-feature">
         <div className="landing-feature-copy">
           <Share2 size={28} strokeWidth={1.8} aria-hidden="true" />
           <h2>Copia o comparte en un toque</h2>
@@ -169,7 +202,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="landing-feature">
+      <section className="landing-feature reverse">
         <div className="landing-feature-copy">
           <WifiOff size={28} strokeWidth={1.8} aria-hidden="true" />
           <h2>Instálala y úsala sin conexión</h2>
