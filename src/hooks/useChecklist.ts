@@ -7,6 +7,7 @@ import {
 } from '../services/database'
 import type { Task, TaskList } from '../types'
 import { isListComplete } from '../utils/progress'
+import { isCountableTask } from '../utils/taskKind'
 
 interface UseChecklistResult {
   list: TaskList | null
@@ -72,37 +73,51 @@ export function useChecklist(listId: string | undefined): UseChecklistResult {
     void refresh()
   }, [refresh])
 
-  const toggleTask = useCallback((taskId: string) => {
-    const current = tasksRef.current.find((task) => task.id === taskId)
-    if (!current) {
-      return
-    }
+  const toggleTask = useCallback(
+    (taskId: string) => {
+      const current = tasksRef.current.find((task) => task.id === taskId)
+      if (!current || !isCountableTask(current)) {
+        return
+      }
 
-    const completed = !current.completed
-    const nextTasks = tasksRef.current.map((task) =>
-      task.id === taskId
-        ? { ...task, completed, updatedAt: Date.now() }
-        : task,
-    )
-
-    tasksRef.current = nextTasks
-    setTasks(nextTasks)
-    setList((currentList) =>
-      currentList ? { ...currentList, updatedAt: Date.now() } : currentList,
-    )
-
-    void setTaskCompleted(taskId, completed).catch((cause: unknown) => {
-      const reverted = tasksRef.current.map((task) =>
+      const completed = !current.completed
+      const nextTasks = tasksRef.current.map((task) =>
         task.id === taskId
-          ? { ...task, completed: current.completed }
+          ? { ...task, completed, updatedAt: Date.now() }
           : task,
       )
-      tasksRef.current = reverted
-      setTasks(reverted)
-      const message = cause instanceof Error ? cause.message : 'No se pudo guardar la tarea.'
-      setError(message)
-    })
-  }, [])
+
+      tasksRef.current = nextTasks
+      setTasks(nextTasks)
+      setList((currentList) =>
+        currentList ? { ...currentList, updatedAt: Date.now() } : currentList,
+      )
+
+      void setTaskCompleted(taskId, completed)
+        .then(async () => {
+          if (!listId) {
+            return
+          }
+          const nextList = await getListById(listId)
+          if (nextList) {
+            setList(nextList)
+          }
+        })
+        .catch((cause: unknown) => {
+          const reverted = tasksRef.current.map((task) =>
+            task.id === taskId
+              ? { ...task, completed: current.completed }
+              : task,
+          )
+          tasksRef.current = reverted
+          setTasks(reverted)
+          const message =
+            cause instanceof Error ? cause.message : 'No se pudo guardar la tarea.'
+          setError(message)
+        })
+    },
+    [listId],
+  )
 
   const resetTasks = useCallback(async () => {
     if (!listId) {
@@ -122,6 +137,10 @@ export function useChecklist(listId: string | undefined): UseChecklistResult {
       const persisted = await resetListTasks(listId)
       tasksRef.current = persisted
       setTasks(persisted)
+      const nextList = await getListById(listId)
+      if (nextList) {
+        setList(nextList)
+      }
       setError(null)
     } catch (cause) {
       tasksRef.current = previous
@@ -132,8 +151,9 @@ export function useChecklist(listId: string | undefined): UseChecklistResult {
     }
   }, [listId])
 
-  const completedCount = tasks.filter((task) => task.completed).length
-  const totalCount = tasks.length
+  const countable = tasks.filter((task) => isCountableTask(task))
+  const completedCount = countable.filter((task) => task.completed).length
+  const totalCount = countable.length
 
   return {
     list,

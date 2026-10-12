@@ -62,6 +62,7 @@ export function useLists(): UseListsResult {
           const summary = byId.get(list.id)
           return {
             ...list,
+            lastCompletedAt: list.lastCompletedAt ?? summary?.lastCompletedAt ?? null,
             totalTasks: summary?.totalTasks ?? 0,
             completedTasks: summary?.completedTasks ?? 0,
           }

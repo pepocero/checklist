@@ -13,8 +13,8 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { Check, Copy, Plus, Share2, Trash2 } from 'lucide-react'
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { Bell, BellRing, Check, Copy, CopyPlus, Heading2, Plus, Share2, Trash2 } from 'lucide-react'
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ActionBar } from '../components/ActionBar'
 import { AppHeader } from '../components/AppHeader'
@@ -24,33 +24,44 @@ import { ReminderDialog } from '../components/ReminderDialog'
 import { SortableTaskRow } from '../components/SortableTaskRow'
 import {
   DatabaseError,
+  addSectionToList,
   addTasksToList,
   deleteList,
   deleteTasks,
+  duplicateList,
   getListById,
   getTasksByListId,
   reorderTasks,
   updateListName,
+  updateListReminder,
+  updateTaskKind,
   updateTaskNote,
+  updateTaskPriority,
   updateTaskReminder,
   updateTaskText,
 } from '../services/database'
+import { MAX_HIGH_PRIORITY_PER_LIST } from '../types'
+import { countHighPriorityTasks } from '../utils/taskPriority'
+import { isSectionTask } from '../utils/taskKind'
 import {
   ReminderError,
+  cancelListReminderSchedule,
   cancelTaskReminderSchedule,
+  ensureNotificationPermission,
+  scheduleListReminder,
   scheduleTaskReminder,
 } from '../services/reminders'
 import { isNativeApp } from '../services/nativeReminders'
 import { addTaskReminderToCalendar } from '../utils/calendarReminder'
 import type { Task, TaskList } from '../types'
-import { parseTaskLines } from '../utils/parseTasks'
+import { parseListItems } from '../utils/parseTasks'
 import {
   copyTextToClipboard,
   formatListAsPlainText,
   shareListText,
 } from '../utils/shareList'
 import { getTaskNote } from '../utils/taskNote'
-import { getTaskReminderAt } from '../utils/taskReminder'
+import { getTaskReminderAt, taskHasReminder } from '../utils/taskReminder'
 
 export function EditListPage() {
   const { id } = useParams()
@@ -73,9 +84,12 @@ export function EditListPage() {
   const [noteTask, setNoteTask] = useState<Task | null>(null)
   const [noteBusy, setNoteBusy] = useState(false)
   const [reminderTask, setReminderTask] = useState<Task | null>(null)
+  const [listReminderOpen, setListReminderOpen] = useState(false)
   const [reminderBusy, setReminderBusy] = useState(false)
   const [reminderError, setReminderError] = useState<string | null>(null)
   const revealedTaskIdsRef = useRef<string[]>([])
+  const highPriorityCount = useMemo(() => countHighPriorityTasks(tasks), [tasks])
+  const highPriorityDisabled = highPriorityCount >= MAX_HIGH_PRIORITY_PER_LIST
 
   useEffect(() => {
     revealedTaskIdsRef.current = revealedTaskIds
@@ -174,8 +188,15 @@ export function EditListPage() {
       return
     }
 
+    const text = newTask.trim()
+    if (!text) {
+      setError('Escribe el texto de la tarea en el cuadro.')
+      return
+    }
+
     try {
-      const created = await addTasksToList(list.id, parseTaskLines(newTask))
+      // Una sola tarea con el texto del cuadro (+). Las secciones van con H2.
+      const created = await addTasksToList(list.id, [{ text, kind: 'task' }])
       setTasks((current) => [...current, ...created])
       setNewTask('')
       setError(null)
@@ -191,12 +212,79 @@ export function EditListPage() {
     }
 
     try {
-      const created = await addTasksToList(list.id, parseTaskLines(bulkTasks))
+      const created = await addTasksToList(list.id, parseListItems(bulkTasks))
       setTasks((current) => [...current, ...created])
       setBulkTasks('')
       setError(null)
     } catch (cause) {
       showError(cause, 'No se pudieron añadir las tareas.')
+    }
+  }
+
+  async function handleAddSection() {
+    if (!list) {
+      return
+    }
+
+    // El botón H2 usa el texto tal cual; no hace falta escribir "##".
+    const title = newTask.trim().replace(/^##\s*/, '')
+    if (!title) {
+      setError('Escribe el título de la sección en el cuadro de texto.')
+      return
+    }
+
+    try {
+      const created = await addSectionToList(list.id, title)
+      setTasks((current) => [...current, created])
+      setDrafts((current) => ({ ...current, [created.id]: created.text }))
+      setNewTask('')
+      setError(null)
+    } catch (cause) {
+      showError(cause, 'No se pudo añadir la sección.')
+    }
+  }
+
+  async function handleDuplicateList() {
+    if (!list) {
+      return
+    }
+
+    setBusy(true)
+    try {
+      await duplicateList(list.id)
+      setError(null)
+      setCopyFeedback(true)
+      window.setTimeout(() => setCopyFeedback(false), 1800)
+    } catch (cause) {
+      showError(cause, 'No se pudo duplicar la lista.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleTogglePriority(task: Task) {
+    if (isSectionTask(task)) {
+      return
+    }
+
+    const next = task.priority === 'high' ? 'normal' : 'high'
+    try {
+      const updated = await updateTaskPriority(task.id, next)
+      setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      setError(null)
+    } catch (cause) {
+      showError(cause, 'No se pudo cambiar la prioridad.')
+    }
+  }
+
+  async function handleToggleKind(task: Task) {
+    const next = isSectionTask(task) ? 'task' : 'section'
+    try {
+      const updated = await updateTaskKind(task.id, next)
+      setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      setError(null)
+    } catch (cause) {
+      showError(cause, 'No se pudo cambiar el tipo de elemento.')
     }
   }
 
@@ -297,6 +385,7 @@ export function EditListPage() {
 
     setBusy(true)
     try {
+      await cancelListReminderSchedule(list.id)
       await deleteList(list.id)
       void navigate('/app', { replace: true })
     } catch (cause) {
@@ -356,6 +445,9 @@ export function EditListPage() {
     setReminderBusy(true)
     setReminderError(null)
     try {
+      if (reminderAt !== null) {
+        await ensureNotificationPermission()
+      }
       const updated = await updateTaskReminder(reminderTask.id, reminderAt)
       setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)))
 
@@ -378,6 +470,39 @@ export function EditListPage() {
         cause instanceof ReminderError || cause instanceof DatabaseError
           ? cause.message
           : 'No se pudo guardar el recordatorio.'
+      setReminderError(message)
+    } finally {
+      setReminderBusy(false)
+    }
+  }
+
+  async function handleSaveListReminder(reminderAt: number | null) {
+    if (!list) {
+      return
+    }
+
+    setReminderBusy(true)
+    setReminderError(null)
+    try {
+      if (reminderAt !== null) {
+        await ensureNotificationPermission()
+      }
+      const updated = await updateListReminder(list.id, reminderAt)
+      setList(updated)
+
+      if (reminderAt === null) {
+        await cancelListReminderSchedule(updated.id)
+      } else {
+        await scheduleListReminder(updated)
+      }
+
+      setListReminderOpen(false)
+      setError(null)
+    } catch (cause) {
+      const message =
+        cause instanceof ReminderError || cause instanceof DatabaseError
+          ? cause.message
+          : 'No se pudo guardar el recordatorio de la lista.'
       setReminderError(message)
     } finally {
       setReminderBusy(false)
@@ -409,6 +534,42 @@ export function EditListPage() {
       />
 
       <ActionBar ariaLabel="Acciones de edición">
+        <button
+          type="button"
+          className={`icon-btn${taskHasReminder(list.reminderAt) ? ' has-list-reminder' : ''}`}
+          aria-label={
+            taskHasReminder(list.reminderAt)
+              ? 'Editar recordatorio de la lista'
+              : 'Añadir recordatorio a la lista'
+          }
+          title={
+            taskHasReminder(list.reminderAt)
+              ? 'Recordatorio activo'
+              : 'Recordatorio de la lista'
+          }
+          onClick={() => {
+            setReminderError(null)
+            setListReminderOpen(true)
+          }}
+        >
+          {taskHasReminder(list.reminderAt) ? (
+            <BellRing size={18} strokeWidth={2.3} aria-hidden="true" />
+          ) : (
+            <Bell size={18} strokeWidth={2.1} aria-hidden="true" />
+          )}
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Duplicar lista"
+          title="Duplicar lista"
+          disabled={busy}
+          onClick={() => {
+            void handleDuplicateList()
+          }}
+        >
+          <CopyPlus size={18} strokeWidth={2.1} />
+        </button>
         <button
           type="button"
           className="icon-btn"
@@ -484,6 +645,7 @@ export function EditListPage() {
                 task={task}
                 draftText={drafts[task.id] ?? task.text}
                 closeSwipeSignal={swipeCloseSignals[task.id] ?? 0}
+                highPriorityDisabled={highPriorityDisabled}
                 onDraftChange={(taskId, text) => {
                   setDrafts((current) => ({ ...current, [taskId]: text }))
                 }}
@@ -493,9 +655,15 @@ export function EditListPage() {
                 onRevealChange={handleRevealChange}
                 onRequestDelete={handleRequestDelete}
                 onEditNote={setNoteTask}
-                onEditReminder={(task) => {
+                onEditReminder={(currentTask) => {
                   setReminderError(null)
-                  setReminderTask(task)
+                  setReminderTask(currentTask)
+                }}
+                onTogglePriority={(currentTask) => {
+                  void handleTogglePriority(currentTask)
+                }}
+                onToggleKind={(currentTask) => {
+                  void handleToggleKind(currentTask)
                 }}
               />
             ))}
@@ -505,14 +673,25 @@ export function EditListPage() {
 
       <form className="add-row" onSubmit={(event) => void handleAddTask(event)}>
         <label className="field grow">
-          <span>Añadir tarea</span>
+          <span>Añadir tarea o sección</span>
           <input
             type="text"
             value={newTask}
             onChange={(event) => setNewTask(event.target.value)}
-            placeholder="Nueva tarea"
+            placeholder="Escribe el texto y pulsa + o H2"
           />
         </label>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Añadir sección con este texto"
+          title="Añadir sección"
+          onClick={() => {
+            void handleAddSection()
+          }}
+        >
+          <Heading2 size={20} strokeWidth={2.3} />
+        </button>
         <button type="submit" className="icon-btn solid" aria-label="Añadir tarea">
           <Plus size={20} strokeWidth={2.3} />
         </button>
@@ -524,7 +703,7 @@ export function EditListPage() {
           <textarea
             value={bulkTasks}
             onChange={(event) => setBulkTasks(event.target.value)}
-            placeholder={'Una tarea por línea'}
+            placeholder={'Una tarea por línea\n(En bloque: ## Título crea sección)'}
             rows={5}
           />
         </label>
@@ -565,6 +744,24 @@ export function EditListPage() {
         }}
         onSave={(reminderAt) => {
           void handleSaveReminder(reminderAt)
+        }}
+      />
+
+      <ReminderDialog
+        open={listReminderOpen}
+        taskText={list.name}
+        reminderAt={getTaskReminderAt(list.reminderAt)}
+        mode="edit"
+        busy={reminderBusy}
+        error={reminderError}
+        onClose={() => {
+          if (!reminderBusy) {
+            setListReminderOpen(false)
+            setReminderError(null)
+          }
+        }}
+        onSave={(reminderAt) => {
+          void handleSaveListReminder(reminderAt)
         }}
       />
 

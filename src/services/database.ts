@@ -1,9 +1,12 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { Task, TaskList, TaskListSummary } from '../types'
-import { normalizeTaskText } from '../utils/parseTasks'
+import type { Task, TaskKind, TaskList, TaskListSummary, TaskPriority } from '../types'
+import { MAX_HIGH_PRIORITY_PER_LIST } from '../types'
+import { normalizeTaskText, type ParsedListItem } from '../utils/parseTasks'
+import { isCountableTask, normalizeTaskKind } from '../utils/taskKind'
+import { normalizeTaskPriority } from '../utils/taskPriority'
 
 const DB_NAME = 'checklist-de-tareas'
-const DB_VERSION = 4
+const DB_VERSION = 5
 
 interface ChecklistSchema extends DBSchema {
   lists: {
@@ -33,6 +36,15 @@ function createId(): string {
 
 function now(): number {
   return Date.now()
+}
+
+async function notifyDataChanged(): Promise<void> {
+  try {
+    const { syncWidgetSnapshot } = await import('./widgetSync')
+    await syncWidgetSnapshot()
+  } catch {
+    // El widget solo aplica en Android; ignorar en web u otros fallos.
+  }
 }
 
 export function getDatabase(): Promise<IDBPDatabase<ChecklistSchema>> {
@@ -75,8 +87,8 @@ export function getDatabase(): Promise<IDBPDatabase<ChecklistSchema>> {
             dbPromise = null
           })
           await ensureListOrders(db)
-          await ensureTaskNotes(db)
-          await ensureTaskReminders(db)
+          await ensureListSchema(db)
+          await ensureTaskSchema(db)
           return db
         })
         .then((db) => {
@@ -100,7 +112,23 @@ export function getDatabase(): Promise<IDBPDatabase<ChecklistSchema>> {
   return dbPromise
 }
 
-function normalizeTask(task: Task): Task {
+export function normalizeList(list: TaskList): TaskList {
+  return {
+    ...list,
+    order: typeof list.order === 'number' ? list.order : 0,
+    lastCompletedAt:
+      typeof list.lastCompletedAt === 'number' && Number.isFinite(list.lastCompletedAt)
+        ? list.lastCompletedAt
+        : null,
+    reminderAt:
+      typeof list.reminderAt === 'number' && Number.isFinite(list.reminderAt)
+        ? list.reminderAt
+        : null,
+  }
+}
+
+export function normalizeTask(task: Task): Task {
+  const kind = normalizeTaskKind(task.kind)
   return {
     ...task,
     note: typeof task.note === 'string' ? task.note : '',
@@ -108,6 +136,9 @@ function normalizeTask(task: Task): Task {
       typeof task.reminderAt === 'number' && Number.isFinite(task.reminderAt)
         ? task.reminderAt
         : null,
+    kind,
+    priority: kind === 'section' ? 'normal' : normalizeTaskPriority(task.priority),
+    completed: kind === 'section' ? false : Boolean(task.completed),
   }
 }
 
@@ -143,28 +174,31 @@ async function ensureListOrders(db: IDBPDatabase<ChecklistSchema>): Promise<void
   await tx.done
 }
 
-async function ensureTaskNotes(db: IDBPDatabase<ChecklistSchema>): Promise<void> {
-  const tx = db.transaction('tasks', 'readwrite')
-  const tasks = await tx.store.getAll()
-  const needsMigration = tasks.some((task) => typeof task.note !== 'string')
+async function ensureListSchema(db: IDBPDatabase<ChecklistSchema>): Promise<void> {
+  const readTx = db.transaction('lists', 'readonly')
+  const lists = await readTx.store.getAll()
+  await readTx.done
 
-  if (!needsMigration) {
-    await tx.done
+  const toUpdate = lists.filter((list) => {
+    const normalized = normalizeList(list)
+    return (
+      normalized.lastCompletedAt !== list.lastCompletedAt ||
+      normalized.reminderAt !== list.reminderAt
+    )
+  })
+
+  if (toUpdate.length === 0) {
     return
   }
 
-  for (const task of tasks) {
-    if (typeof task.note === 'string') {
-      continue
-    }
-
-    await tx.store.put({ ...task, note: '' })
+  const writeTx = db.transaction('lists', 'readwrite')
+  for (const list of toUpdate) {
+    await writeTx.store.put(normalizeList(list))
   }
-
-  await tx.done
+  await writeTx.done
 }
 
-async function ensureTaskReminders(db: IDBPDatabase<ChecklistSchema>): Promise<void> {
+async function ensureTaskSchema(db: IDBPDatabase<ChecklistSchema>): Promise<void> {
   const readTx = db.transaction('tasks', 'readonly')
   const tasks = await readTx.store.getAll()
   await readTx.done
@@ -172,9 +206,11 @@ async function ensureTaskReminders(db: IDBPDatabase<ChecklistSchema>): Promise<v
   const toUpdate = tasks.filter((task) => {
     const normalized = normalizeTask(task)
     return (
-      !Object.prototype.hasOwnProperty.call(task, 'reminderAt') ||
       normalized.note !== task.note ||
-      normalized.reminderAt !== task.reminderAt
+      normalized.reminderAt !== task.reminderAt ||
+      normalized.kind !== task.kind ||
+      normalized.priority !== task.priority ||
+      normalized.completed !== task.completed
     )
   })
 
@@ -211,6 +247,20 @@ function requireName(name: string): string {
   return normalized
 }
 
+function toParsedItems(items: Array<string | ParsedListItem>): ParsedListItem[] {
+  return items
+    .map((item) => {
+      if (typeof item === 'string') {
+        return { text: normalizeTaskText(item), kind: 'task' as const }
+      }
+      return {
+        text: normalizeTaskText(item.text),
+        kind: item.kind === 'section' ? ('section' as const) : ('task' as const),
+      }
+    })
+    .filter((item) => item.text.length > 0)
+}
+
 async function getTasksInTransaction(
   listId: string,
   taskStore: {
@@ -219,6 +269,22 @@ async function getTasksInTransaction(
 ): Promise<Task[]> {
   const tasks = await taskStore.index('by-listId').getAll(listId)
   return sortTasks(tasks)
+}
+
+function countableStats(tasks: Task[]): { total: number; completed: number } {
+  let total = 0
+  let completed = 0
+  for (const task of tasks) {
+    const normalized = normalizeTask(task)
+    if (!isCountableTask(normalized)) {
+      continue
+    }
+    total += 1
+    if (normalized.completed) {
+      completed += 1
+    }
+  }
+  return { total, completed }
 }
 
 export async function getAllListSummaries(): Promise<TaskListSummary[]> {
@@ -232,9 +298,13 @@ export async function getAllListSummaries(): Promise<TaskListSummary[]> {
     const totals = new Map<string, { total: number; completed: number }>()
 
     for (const task of tasks) {
+      const normalized = normalizeTask(task)
+      if (!isCountableTask(normalized)) {
+        continue
+      }
       const current = totals.get(task.listId) ?? { total: 0, completed: 0 }
       current.total += 1
-      if (task.completed) {
+      if (normalized.completed) {
         current.completed += 1
       }
       totals.set(task.listId, current)
@@ -244,8 +314,7 @@ export async function getAllListSummaries(): Promise<TaskListSummary[]> {
       lists.map((list) => {
         const stats = totals.get(list.id) ?? { total: 0, completed: 0 }
         return {
-          ...list,
-          order: typeof list.order === 'number' ? list.order : 0,
+          ...normalizeList(list),
           totalTasks: stats.total,
           completedTasks: stats.completed,
         }
@@ -263,7 +332,8 @@ export async function getAllListSummaries(): Promise<TaskListSummary[]> {
 export async function getListById(listId: string): Promise<TaskList | undefined> {
   try {
     const db = await getDatabase()
-    return await db.get('lists', listId)
+    const list = await db.get('lists', listId)
+    return list ? normalizeList(list) : undefined
   } catch (cause) {
     if (cause instanceof DatabaseError) {
       throw cause
@@ -289,13 +359,17 @@ export async function getTasksByListId(listId: string): Promise<Task[]> {
 
 export async function createListWithTasks(
   name: string,
-  taskTexts: string[],
+  items: Array<string | ParsedListItem>,
 ): Promise<TaskList> {
   const listName = requireName(name)
-  const texts = taskTexts.map(normalizeTaskText).filter((text) => text.length > 0)
+  const parsed = toParsedItems(items)
 
-  if (texts.length === 0) {
+  if (parsed.length === 0) {
     throw new DatabaseError('Añade al menos una tarea.')
+  }
+
+  if (parsed.every((item) => item.kind === 'section')) {
+    throw new DatabaseError('Añade al menos una tarea (no solo secciones).')
   }
 
   const createdAt = now()
@@ -312,6 +386,8 @@ export async function createListWithTasks(
       id: createId(),
       name: listName,
       order: nextOrder,
+      lastCompletedAt: null,
+      reminderAt: null,
       createdAt,
       updatedAt: createdAt,
     }
@@ -319,13 +395,15 @@ export async function createListWithTasks(
     await listStore.add(list)
 
     const taskStore = tx.objectStore('tasks')
-    for (const [index, text] of texts.entries()) {
+    for (const [index, item] of parsed.entries()) {
       const task: Task = {
         id: createId(),
         listId: list.id,
-        text,
+        text: item.text,
         note: '',
         reminderAt: null,
+        kind: item.kind,
+        priority: 'normal',
         completed: false,
         order: index,
         createdAt,
@@ -335,6 +413,7 @@ export async function createListWithTasks(
     }
 
     await tx.done
+    await notifyDataChanged()
     return list
   } catch (cause) {
     if (cause instanceof DatabaseError) {
@@ -342,6 +421,71 @@ export async function createListWithTasks(
     }
 
     throw new DatabaseError('No se pudo crear la lista.', { cause })
+  }
+}
+
+export async function duplicateList(listId: string): Promise<TaskList> {
+  try {
+    const db = await getDatabase()
+    const readTx = db.transaction(['lists', 'tasks'], 'readonly')
+    const source = await readTx.objectStore('lists').get(listId)
+    if (!source) {
+      throw new DatabaseError('La lista no existe.')
+    }
+    const sourceTasks = sortTasks(
+      await readTx.objectStore('tasks').index('by-listId').getAll(listId),
+    )
+    const allLists = await readTx.objectStore('lists').getAll()
+    await readTx.done
+
+    const createdAt = now()
+    const nextOrder =
+      allLists.reduce((max, list) => Math.max(max, list.order ?? -1), -1) + 1
+    const baseName = source.name.trim()
+    const copyName = baseName.endsWith('(copia)')
+      ? `${baseName}`
+      : `${baseName} (copia)`
+
+    const list: TaskList = {
+      id: createId(),
+      name: copyName.slice(0, 120),
+      order: nextOrder,
+      lastCompletedAt: null,
+      reminderAt: null,
+      createdAt,
+      updatedAt: createdAt,
+    }
+
+    const writeTx = db.transaction(['lists', 'tasks'], 'readwrite')
+    await writeTx.objectStore('lists').add(list)
+
+    for (const [index, sourceTask] of sourceTasks.entries()) {
+      const normalized = normalizeTask(sourceTask)
+      const task: Task = {
+        id: createId(),
+        listId: list.id,
+        text: normalized.text,
+        note: normalized.kind === 'section' ? '' : normalized.note,
+        reminderAt: null,
+        kind: normalized.kind,
+        priority: normalized.kind === 'section' ? 'normal' : normalized.priority,
+        completed: false,
+        order: index,
+        createdAt,
+        updatedAt: createdAt,
+      }
+      await writeTx.objectStore('tasks').add(task)
+    }
+
+    await writeTx.done
+    await notifyDataChanged()
+    return list
+  } catch (cause) {
+    if (cause instanceof DatabaseError) {
+      throw cause
+    }
+
+    throw new DatabaseError('No se pudo duplicar la lista.', { cause })
   }
 }
 
@@ -358,12 +502,13 @@ export async function updateListName(listId: string, name: string): Promise<Task
     }
 
     const updated: TaskList = {
-      ...current,
+      ...normalizeList(current),
       name: listName,
       updatedAt: now(),
     }
     await tx.store.put(updated)
     await tx.done
+    await notifyDataChanged()
     return updated
   } catch (cause) {
     if (cause instanceof DatabaseError) {
@@ -371,6 +516,94 @@ export async function updateListName(listId: string, name: string): Promise<Task
     }
 
     throw new DatabaseError('No se pudo actualizar el nombre de la lista.', { cause })
+  }
+}
+
+export async function updateListLastCompletedAt(
+  listId: string,
+  lastCompletedAt: number,
+): Promise<TaskList> {
+  try {
+    const db = await getDatabase()
+    const tx = db.transaction('lists', 'readwrite')
+    const current = await tx.store.get(listId)
+
+    if (!current) {
+      throw new DatabaseError('La lista no existe.')
+    }
+
+    const updated: TaskList = {
+      ...normalizeList(current),
+      lastCompletedAt,
+      updatedAt: now(),
+    }
+    await tx.store.put(updated)
+    await tx.done
+    await notifyDataChanged()
+    return updated
+  } catch (cause) {
+    if (cause instanceof DatabaseError) {
+      throw cause
+    }
+
+    throw new DatabaseError('No se pudo guardar el historial de la lista.', { cause })
+  }
+}
+
+export async function updateListReminder(
+  listId: string,
+  reminderAt: number | null,
+): Promise<TaskList> {
+  if (reminderAt !== null) {
+    if (!Number.isFinite(reminderAt)) {
+      throw new DatabaseError('La fecha del recordatorio no es válida.')
+    }
+    if (reminderAt <= Date.now() - 30_000) {
+      throw new DatabaseError('Elige una fecha y hora futuras.')
+    }
+  }
+
+  try {
+    const db = await getDatabase()
+    const tx = db.transaction('lists', 'readwrite')
+    const current = await tx.store.get(listId)
+
+    if (!current) {
+      throw new DatabaseError('La lista no existe.')
+    }
+
+    const updated: TaskList = {
+      ...normalizeList(current),
+      reminderAt,
+      updatedAt: now(),
+    }
+    await tx.store.put(updated)
+    await tx.done
+    await notifyDataChanged()
+    return updated
+  } catch (cause) {
+    if (cause instanceof DatabaseError) {
+      throw cause
+    }
+
+    throw new DatabaseError('No se pudo guardar el recordatorio de la lista.', { cause })
+  }
+}
+
+export async function getListsWithReminders(): Promise<TaskList[]> {
+  try {
+    const db = await getDatabase()
+    const lists = await db.getAll('lists')
+    return lists
+      .map((list) => normalizeList(list))
+      .filter(
+        (list) =>
+          typeof list.reminderAt === 'number' && Number.isFinite(list.reminderAt),
+      )
+  } catch (cause) {
+    throw new DatabaseError('No se pudieron leer los recordatorios de listas.', {
+      cause,
+    })
   }
 }
 
@@ -386,9 +619,14 @@ export async function setTaskCompleted(taskId: string, completed: boolean): Prom
       throw new DatabaseError('La tarea no existe.')
     }
 
+    const normalizedCurrent = normalizeTask(current)
+    if (!isCountableTask(normalizedCurrent)) {
+      throw new DatabaseError('Las secciones no se pueden marcar como hechas.')
+    }
+
     const updatedAt = now()
     const updated: Task = {
-      ...current,
+      ...normalizedCurrent,
       completed,
       updatedAt,
     }
@@ -396,10 +634,21 @@ export async function setTaskCompleted(taskId: string, completed: boolean): Prom
 
     const list = await listStore.get(current.listId)
     if (list) {
-      await listStore.put({ ...list, updatedAt })
+      const siblings = await getTasksInTransaction(current.listId, taskStore)
+      const withUpdate = siblings.map((task) =>
+        task.id === updated.id ? updated : normalizeTask(task),
+      )
+      const stats = countableStats(withUpdate)
+      const allDone = stats.total > 0 && stats.completed === stats.total
+      await listStore.put({
+        ...normalizeList(list),
+        updatedAt,
+        lastCompletedAt: allDone ? updatedAt : normalizeList(list).lastCompletedAt,
+      })
     }
 
     await tx.done
+    await notifyDataChanged()
     return updated
   } catch (cause) {
     if (cause instanceof DatabaseError) {
@@ -414,7 +663,7 @@ export async function updateTaskText(taskId: string, text: string): Promise<Task
   const normalized = normalizeTaskText(text)
 
   if (!normalized) {
-    throw new DatabaseError('El texto de la tarea no puede estar vacío.')
+    throw new DatabaseError('El texto no puede estar vacío.')
   }
 
   try {
@@ -429,7 +678,7 @@ export async function updateTaskText(taskId: string, text: string): Promise<Task
 
     const updatedAt = now()
     const updated: Task = {
-      ...current,
+      ...normalizeTask(current),
       text: normalized,
       updatedAt,
     }
@@ -437,10 +686,11 @@ export async function updateTaskText(taskId: string, text: string): Promise<Task
 
     const list = await tx.objectStore('lists').get(current.listId)
     if (list) {
-      await tx.objectStore('lists').put({ ...list, updatedAt })
+      await tx.objectStore('lists').put({ ...normalizeList(list), updatedAt })
     }
 
     await tx.done
+    await notifyDataChanged()
     return updated
   } catch (cause) {
     if (cause instanceof DatabaseError) {
@@ -464,9 +714,14 @@ export async function updateTaskNote(taskId: string, note: string): Promise<Task
       throw new DatabaseError('La tarea no existe.')
     }
 
+    const normalizedCurrent = normalizeTask(current)
+    if (!isCountableTask(normalizedCurrent)) {
+      throw new DatabaseError('Las secciones no tienen nota.')
+    }
+
     const updatedAt = now()
     const updated: Task = {
-      ...current,
+      ...normalizedCurrent,
       note: normalized,
       updatedAt,
     }
@@ -474,10 +729,11 @@ export async function updateTaskNote(taskId: string, note: string): Promise<Task
 
     const list = await tx.objectStore('lists').get(current.listId)
     if (list) {
-      await tx.objectStore('lists').put({ ...list, updatedAt })
+      await tx.objectStore('lists').put({ ...normalizeList(list), updatedAt })
     }
 
     await tx.done
+    await notifyDataChanged()
     return updated
   } catch (cause) {
     if (cause instanceof DatabaseError) {
@@ -511,9 +767,14 @@ export async function updateTaskReminder(
       throw new DatabaseError('La tarea no existe.')
     }
 
+    const normalizedCurrent = normalizeTask(current)
+    if (!isCountableTask(normalizedCurrent)) {
+      throw new DatabaseError('Las secciones no tienen recordatorio.')
+    }
+
     const updatedAt = now()
     const updated: Task = {
-      ...current,
+      ...normalizedCurrent,
       reminderAt,
       updatedAt,
     }
@@ -521,10 +782,11 @@ export async function updateTaskReminder(
 
     const list = await tx.objectStore('lists').get(current.listId)
     if (list) {
-      await tx.objectStore('lists').put({ ...list, updatedAt })
+      await tx.objectStore('lists').put({ ...normalizeList(list), updatedAt })
     }
 
     await tx.done
+    await notifyDataChanged()
     return updated
   } catch (cause) {
     if (cause instanceof DatabaseError) {
@@ -535,15 +797,158 @@ export async function updateTaskReminder(
   }
 }
 
+export async function updateTaskKind(
+  taskId: string,
+  kind: TaskKind,
+): Promise<Task> {
+  const nextKind = normalizeTaskKind(kind)
+
+  try {
+    const db = await getDatabase()
+    const tx = db.transaction(['tasks', 'lists'], 'readwrite')
+    const taskStore = tx.objectStore('tasks')
+    const current = await taskStore.get(taskId)
+
+    if (!current) {
+      throw new DatabaseError('La tarea no existe.')
+    }
+
+    const normalizedCurrent = normalizeTask(current)
+    const updatedAt = now()
+    const updated: Task = {
+      ...normalizedCurrent,
+      kind: nextKind,
+      priority: nextKind === 'section' ? 'normal' : normalizedCurrent.priority,
+      completed: nextKind === 'section' ? false : normalizedCurrent.completed,
+      note: nextKind === 'section' ? '' : normalizedCurrent.note,
+      reminderAt: nextKind === 'section' ? null : normalizedCurrent.reminderAt,
+      updatedAt,
+    }
+    await taskStore.put(updated)
+
+    const list = await tx.objectStore('lists').get(current.listId)
+    if (list) {
+      await tx.objectStore('lists').put({ ...normalizeList(list), updatedAt })
+    }
+
+    await tx.done
+    await notifyDataChanged()
+    return updated
+  } catch (cause) {
+    if (cause instanceof DatabaseError) {
+      throw cause
+    }
+
+    throw new DatabaseError('No se pudo cambiar el tipo de elemento.', { cause })
+  }
+}
+
+export async function updateTaskPriority(
+  taskId: string,
+  priority: TaskPriority,
+): Promise<Task> {
+  const nextPriority = normalizeTaskPriority(priority)
+
+  try {
+    const db = await getDatabase()
+    const tx = db.transaction(['tasks', 'lists'], 'readwrite')
+    const taskStore = tx.objectStore('tasks')
+    const current = await taskStore.get(taskId)
+
+    if (!current) {
+      throw new DatabaseError('La tarea no existe.')
+    }
+
+    const normalizedCurrent = normalizeTask(current)
+    if (!isCountableTask(normalizedCurrent)) {
+      throw new DatabaseError('Las secciones no tienen prioridad.')
+    }
+
+    if (nextPriority === 'high' && normalizedCurrent.priority !== 'high') {
+      const siblings = await getTasksInTransaction(current.listId, taskStore)
+      const highCount = siblings.filter(
+        (task) =>
+          task.id !== taskId &&
+          isCountableTask(task) &&
+          normalizeTaskPriority(task.priority) === 'high',
+      ).length
+      if (highCount >= MAX_HIGH_PRIORITY_PER_LIST) {
+        throw new DatabaseError(
+          `Solo puedes marcar ${MAX_HIGH_PRIORITY_PER_LIST} tareas como prioritarias por lista.`,
+        )
+      }
+    }
+
+    const updatedAt = now()
+    const updated: Task = {
+      ...normalizedCurrent,
+      priority: nextPriority,
+      updatedAt,
+    }
+    await taskStore.put(updated)
+
+    const list = await tx.objectStore('lists').get(current.listId)
+    if (list) {
+      await tx.objectStore('lists').put({ ...normalizeList(list), updatedAt })
+    }
+
+    await tx.done
+    await notifyDataChanged()
+    return updated
+  } catch (cause) {
+    if (cause instanceof DatabaseError) {
+      throw cause
+    }
+
+    throw new DatabaseError('No se pudo guardar la prioridad.', { cause })
+  }
+}
+
 export async function getTasksWithReminders(): Promise<Task[]> {
   try {
     const db = await getDatabase()
     const tasks = await db.getAll('tasks')
-    return tasks.filter(
-      (task) => typeof task.reminderAt === 'number' && Number.isFinite(task.reminderAt),
-    )
+    return tasks
+      .map((task) => normalizeTask(task))
+      .filter(
+        (task) =>
+          isCountableTask(task) &&
+          typeof task.reminderAt === 'number' &&
+          Number.isFinite(task.reminderAt),
+      )
   } catch (cause) {
     throw new DatabaseError('No se pudieron leer los recordatorios.', { cause })
+  }
+}
+
+export async function getUpcomingReminderItems(): Promise<
+  Array<{ task: Task; list: TaskList }>
+> {
+  try {
+    const db = await getDatabase()
+    const tx = db.transaction(['lists', 'tasks'], 'readonly')
+    const lists = await tx.objectStore('lists').getAll()
+    const tasks = await tx.objectStore('tasks').getAll()
+    await tx.done
+
+    const listById = new Map(lists.map((list) => [list.id, normalizeList(list)]))
+
+    return tasks
+      .map((task) => normalizeTask(task))
+      .filter(
+        (task) =>
+          isCountableTask(task) &&
+          typeof task.reminderAt === 'number' &&
+          Number.isFinite(task.reminderAt),
+      )
+      .map((task) => {
+        const list = listById.get(task.listId)
+        return list ? { task, list } : null
+      })
+      .filter((item): item is { task: Task; list: TaskList } => item !== null)
+      .sort((a, b) => (a.task.reminderAt ?? 0) - (b.task.reminderAt ?? 0))
+  } catch (cause) {
+    throw new DatabaseError('No se pudieron cargar los recordatorios.', { cause })
   }
 }
 
@@ -558,28 +963,33 @@ export async function clearTaskReminder(taskId: string): Promise<Task | null> {
       return null
     }
 
-    if (current.reminderAt === null) {
+    const normalized = normalizeTask(current)
+    if (normalized.reminderAt === null) {
       await tx.done
-      return current
+      return normalized
     }
 
     const updated: Task = {
-      ...current,
+      ...normalized,
       reminderAt: null,
       updatedAt: now(),
     }
     await tx.store.put(updated)
     await tx.done
+    await notifyDataChanged()
     return updated
   } catch (cause) {
     throw new DatabaseError('No se pudo limpiar el recordatorio.', { cause })
   }
 }
 
-export async function addTasksToList(listId: string, taskTexts: string[]): Promise<Task[]> {
-  const texts = taskTexts.map(normalizeTaskText).filter((text) => text.length > 0)
+export async function addTasksToList(
+  listId: string,
+  items: Array<string | ParsedListItem>,
+): Promise<Task[]> {
+  const parsed = toParsedItems(items)
 
-  if (texts.length === 0) {
+  if (parsed.length === 0) {
     throw new DatabaseError('Añade al menos una tarea.')
   }
 
@@ -596,12 +1006,14 @@ export async function addTasksToList(listId: string, taskTexts: string[]): Promi
 
     const existing = await getTasksInTransaction(listId, taskStore)
     const createdAt = now()
-    const created: Task[] = texts.map((text, index) => ({
+    const created: Task[] = parsed.map((item, index) => ({
       id: createId(),
       listId,
-      text,
+      text: item.text,
       note: '',
       reminderAt: null,
+      kind: item.kind,
+      priority: 'normal' as TaskPriority,
       completed: false,
       order: existing.length + index,
       createdAt,
@@ -612,8 +1024,9 @@ export async function addTasksToList(listId: string, taskTexts: string[]): Promi
       await taskStore.add(task)
     }
 
-    await listStore.put({ ...list, updatedAt: createdAt })
+    await listStore.put({ ...normalizeList(list), updatedAt: createdAt })
     await tx.done
+    await notifyDataChanged()
     return created
   } catch (cause) {
     if (cause instanceof DatabaseError) {
@@ -622,6 +1035,19 @@ export async function addTasksToList(listId: string, taskTexts: string[]): Promi
 
     throw new DatabaseError('No se pudieron añadir las tareas.', { cause })
   }
+}
+
+export async function addSectionToList(listId: string, title: string): Promise<Task> {
+  const text = normalizeTaskText(title)
+  if (!text) {
+    throw new DatabaseError('El título de la sección no puede estar vacío.')
+  }
+
+  const [created] = await addTasksToList(listId, [{ text, kind: 'section' }])
+  if (!created) {
+    throw new DatabaseError('No se pudo añadir la sección.')
+  }
+  return created
 }
 
 export async function deleteTask(taskId: string): Promise<void> {
@@ -666,11 +1092,12 @@ export async function deleteTasks(taskIds: string[]): Promise<void> {
 
       const list = await listStore.get(listId)
       if (list) {
-        await listStore.put({ ...list, updatedAt })
+        await listStore.put({ ...normalizeList(list), updatedAt })
       }
     }
 
     await tx.done
+    await notifyDataChanged()
   } catch (cause) {
     if (cause instanceof DatabaseError) {
       throw cause
@@ -706,7 +1133,7 @@ export async function reorderLists(orderedListIds: string[]): Promise<TaskList[]
         throw new DatabaseError('El orden de las listas no es válido.')
       }
 
-      return { ...list, order, updatedAt }
+      return { ...normalizeList(list), order, updatedAt }
     })
 
     for (const list of normalized) {
@@ -714,6 +1141,7 @@ export async function reorderLists(orderedListIds: string[]): Promise<TaskList[]
     }
 
     await tx.done
+    await notifyDataChanged()
     return normalized
   } catch (cause) {
     if (cause instanceof DatabaseError) {
@@ -756,15 +1184,16 @@ export async function reorderTasks(
         throw new DatabaseError('El orden de las tareas no es válido.')
       }
 
-      return { ...task, order, updatedAt }
+      return { ...normalizeTask(task), order, updatedAt }
     })
 
     for (const task of normalized) {
       await taskStore.put(task)
     }
 
-    await listStore.put({ ...list, updatedAt })
+    await listStore.put({ ...normalizeList(list), updatedAt })
     await tx.done
+    await notifyDataChanged()
     return normalized
   } catch (cause) {
     if (cause instanceof DatabaseError) {
@@ -790,7 +1219,7 @@ export async function resetListTasks(listId: string): Promise<Task[]> {
     const tasks = await getTasksInTransaction(listId, taskStore)
     const updatedAt = now()
     const resetTasks = tasks.map((task) => ({
-      ...task,
+      ...normalizeTask(task),
       completed: false,
       updatedAt,
     }))
@@ -799,8 +1228,9 @@ export async function resetListTasks(listId: string): Promise<Task[]> {
       await taskStore.put(task)
     }
 
-    await listStore.put({ ...list, updatedAt })
+    await listStore.put({ ...normalizeList(list), updatedAt })
     await tx.done
+    await notifyDataChanged()
     return resetTasks
   } catch (cause) {
     if (cause instanceof DatabaseError) {
@@ -824,6 +1254,7 @@ export async function deleteList(listId: string): Promise<void> {
 
     await tx.objectStore('lists').delete(listId)
     await tx.done
+    await notifyDataChanged()
   } catch (cause) {
     if (cause instanceof DatabaseError) {
       throw cause
@@ -836,8 +1267,8 @@ export async function deleteList(listId: string): Promise<void> {
 export async function exportAllData(): Promise<{ lists: TaskList[]; tasks: Task[] }> {
   try {
     const db = await getDatabase()
-    const lists = await db.getAll('lists')
-    const tasks = await db.getAll('tasks')
+    const lists = (await db.getAll('lists')).map((list) => normalizeList(list))
+    const tasks = (await db.getAll('tasks')).map((task) => normalizeTask(task))
     return { lists, tasks }
   } catch (cause) {
     if (cause instanceof DatabaseError) {
@@ -866,14 +1297,15 @@ export async function replaceAllData(lists: TaskList[], tasks: Task[]): Promise<
     }
 
     for (const list of lists) {
-      await listStore.put(list)
+      await listStore.put(normalizeList(list))
     }
 
     for (const task of tasks) {
-      await taskStore.put(task)
+      await taskStore.put(normalizeTask(task))
     }
 
     await tx.done
+    await notifyDataChanged()
   } catch (cause) {
     if (cause instanceof DatabaseError) {
       throw cause
@@ -882,3 +1314,5 @@ export async function replaceAllData(lists: TaskList[], tasks: Task[]): Promise<
     throw new DatabaseError('No se pudo restaurar la copia de seguridad.', { cause })
   }
 }
+
+export type { TaskKind }

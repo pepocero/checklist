@@ -4,20 +4,29 @@ interface ChecklistProgressProps {
   completed: number
   total: number
   compact?: boolean
+  sectionCount?: number
 }
 
 export function ChecklistProgress({
   completed,
   total,
   compact = false,
+  sectionCount = 0,
 }: ChecklistProgressProps) {
   const percent = getCompletionPercent(completed, total)
+  const taskLabel = total === 1 ? 'tarea' : 'tareas'
+  const sectionLabel =
+    sectionCount > 0
+      ? ` · ${sectionCount} ${sectionCount === 1 ? 'sección' : 'secciones'}`
+      : ''
 
   return (
     <div className={`progress ${compact ? 'compact' : ''}`}>
       <div className="progress-meta">
         <span>
-          {completed} / {total} {compact ? 'tareas completadas' : 'completadas'}
+          {completed} / {total} {taskLabel}
+          {compact ? '' : sectionLabel}
+          {compact ? ' completadas' : ''}
         </span>
         <strong>{percent}%</strong>
       </div>

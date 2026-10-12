@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
-import type { Task } from '../types'
+import type { Task, TaskList } from '../types'
 import { getTaskReminderAt } from '../utils/taskReminder'
 import { ReminderError } from './reminderError'
 
@@ -111,6 +111,55 @@ export async function scheduleNativeTaskReminder(task: Task): Promise<void> {
         extra: {
           taskId: task.id,
           listId: task.listId,
+        },
+      },
+    ],
+  })
+}
+
+function listReminderKey(listId: string): string {
+  return `list:${listId}`
+}
+
+export async function cancelNativeListReminder(listId: string): Promise<void> {
+  if (!isNativeApp()) {
+    return
+  }
+
+  const id = nativeNotificationId(listReminderKey(listId))
+  await LocalNotifications.cancel({ notifications: [{ id }] })
+}
+
+export async function scheduleNativeListReminder(list: TaskList): Promise<void> {
+  if (!isNativeApp()) {
+    return
+  }
+
+  const reminderAt = getTaskReminderAt(list.reminderAt)
+  if (reminderAt === null) {
+    return
+  }
+
+  await ensureNativeNotificationPermission()
+  await cancelNativeListReminder(list.id)
+
+  if (reminderAt <= Date.now()) {
+    return
+  }
+
+  await LocalNotifications.schedule({
+    notifications: [
+      {
+        id: nativeNotificationId(listReminderKey(list.id)),
+        title: 'Recordatorio de lista',
+        body: list.name,
+        schedule: {
+          at: new Date(reminderAt),
+          allowWhileIdle: true,
+        },
+        channelId: CHANNEL_ID,
+        extra: {
+          listId: list.id,
         },
       },
     ],

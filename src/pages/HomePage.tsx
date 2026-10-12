@@ -13,7 +13,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { ClipboardList, ArrowLeft, DatabaseBackup, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ClipboardList, ArrowLeft, CalendarClock, Copy, DatabaseBackup, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ActionBar } from '../components/ActionBar'
@@ -23,14 +23,18 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { InstallPrompt } from '../components/InstallPrompt'
 import { SortableListCard } from '../components/SortableListCard'
 import { useLists } from '../hooks/useLists'
+import { duplicateList } from '../services/database'
+import { cancelListReminderSchedule } from '../services/reminders'
 import type { TaskListSummary } from '../types'
 
 export function HomePage() {
   const { lists, setLists, isReady, error, deleteList, reorderLists, refresh } = useLists()
   const [pendingDelete, setPendingDelete] = useState<TaskListSummary | null>(null)
   const [busy, setBusy] = useState(false)
+  const [duplicateBusyId, setDuplicateBusyId] = useState<string | null>(null)
   const [swipeCloseSignal, setSwipeCloseSignal] = useState(0)
   const [backupOpen, setBackupOpen] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -48,11 +52,28 @@ export function HomePage() {
 
     setBusy(true)
     try {
+      await cancelListReminderSchedule(pendingDelete.id)
       await deleteList(pendingDelete.id)
       setPendingDelete(null)
       setSwipeCloseSignal((current) => current + 1)
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function handleDuplicate(list: TaskListSummary) {
+    setDuplicateBusyId(list.id)
+    setActionError(null)
+    try {
+      await duplicateList(list.id)
+      setSwipeCloseSignal((current) => current + 1)
+      await refresh()
+    } catch (cause) {
+      const message =
+        cause instanceof Error ? cause.message : 'No se pudo duplicar la lista.'
+      setActionError(message)
+    } finally {
+      setDuplicateBusyId(null)
     }
   }
 
@@ -93,6 +114,14 @@ export function HomePage() {
           <Plus size={20} strokeWidth={2.3} aria-hidden="true" />
           <span>Nueva lista</span>
         </Link>
+        <Link
+          to="/hoy"
+          className="icon-btn solid"
+          aria-label="Hoy y próximos"
+          title="Hoy y próximos"
+        >
+          <CalendarClock size={20} strokeWidth={2.3} aria-hidden="true" />
+        </Link>
         <button
           type="button"
           className="icon-btn solid"
@@ -106,7 +135,9 @@ export function HomePage() {
 
       <InstallPrompt />
 
-      {error ? <p className="banner error">{error}</p> : null}
+      {error || actionError ? (
+        <p className="banner error">{actionError ?? error}</p>
+      ) : null}
 
       {isReady && lists.length === 0 ? (
         <div className="empty-state">
@@ -136,6 +167,9 @@ export function HomePage() {
                 <span>Desliza a la izquierda</span>
               </span>
               <span className="swipe-hint-actions">
+                <span className="swipe-hint-side duplicate">
+                  <Copy size={14} strokeWidth={2.2} />
+                </span>
                 <span className="swipe-hint-side edit">
                   <Pencil size={14} strokeWidth={2.2} />
                 </span>
@@ -151,6 +185,10 @@ export function HomePage() {
                   list={list}
                   closeSwipeSignal={swipeCloseSignal}
                   onDelete={setPendingDelete}
+                  onDuplicate={(item) => {
+                    void handleDuplicate(item)
+                  }}
+                  duplicateBusy={duplicateBusyId === list.id}
                 />
               ))}
             </div>

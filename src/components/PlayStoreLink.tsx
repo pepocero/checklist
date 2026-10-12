@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core'
 import { Smartphone } from 'lucide-react'
 import { PLAY_STORE_URL } from '../constants/store'
 
@@ -12,6 +13,10 @@ export function PlayStoreLink({
   label = 'Google Play',
   shortLabel,
 }: PlayStoreLinkProps) {
+  if (Capacitor.isNativePlatform()) {
+    return null
+  }
+
   return (
     <a
       href={PLAY_STORE_URL}

@@ -1,10 +1,20 @@
 import type { Task } from '../types'
+import { isSectionTask } from './taskKind'
 
-/** Texto plano de tareas (una por línea), listo para pegar en "Nueva lista". */
+/** Texto plano listo para pegar en "Nueva lista" (secciones como `## Título`). */
 export function formatListAsPlainText(tasks: Task[]): string {
   return tasks
-    .map((task) => task.text.trim())
-    .filter((text) => text.length > 0)
+    .map((task) => {
+      const text = task.text.trim()
+      if (!text) {
+        return ''
+      }
+      if (isSectionTask(task)) {
+        return `## ${text}`
+      }
+      return text
+    })
+    .filter((line) => line.length > 0)
     .join('\n')
 }
 
@@ -62,4 +72,3 @@ export async function shareListText(
   await copyTextToClipboard(text)
   return 'copied'
 }
-

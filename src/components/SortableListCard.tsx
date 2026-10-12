@@ -1,13 +1,14 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Pencil, Trash2 } from 'lucide-react'
+import { Copy, GripVertical, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { TaskListSummary } from '../types'
+import { formatLastCompletedAt } from '../utils/formatLastCompleted'
 import { ChecklistProgress } from './ChecklistProgress'
 
-const ACTION_WIDTH = 76
-const ACTIONS_WIDTH = ACTION_WIDTH * 2
+const ACTION_WIDTH = 72
+const ACTIONS_WIDTH = ACTION_WIDTH * 3
 const OPEN_THRESHOLD = 40
 const DIRECTION_LOCK = 8
 
@@ -15,12 +16,16 @@ interface SortableListCardProps {
   list: TaskListSummary
   closeSwipeSignal?: number
   onDelete: (list: TaskListSummary) => void
+  onDuplicate: (list: TaskListSummary) => void
+  duplicateBusy?: boolean
 }
 
 export function SortableListCard({
   list,
   closeSwipeSignal = 0,
   onDelete,
+  onDuplicate,
+  duplicateBusy = false,
 }: SortableListCardProps) {
   const navigate = useNavigate()
   const {
@@ -42,10 +47,28 @@ export function SortableListCard({
   const originOffsetRef = useRef(0)
   const axisRef = useRef<'none' | 'horizontal' | 'vertical'>('none')
   const suppressClickRef = useRef(false)
+  const suppressClickTimerRef = useRef<number | null>(null)
+  const lastCompletedLabel = formatLastCompletedAt(list.lastCompletedAt)
 
   function applyOffset(next: number) {
     offsetRef.current = next
     setOffset(next)
+  }
+
+  function clearSuppressClickTimer() {
+    if (suppressClickTimerRef.current !== null) {
+      window.clearTimeout(suppressClickTimerRef.current)
+      suppressClickTimerRef.current = null
+    }
+  }
+
+  function suppressClickFromGesture() {
+    suppressClickRef.current = true
+    clearSuppressClickTimer()
+    suppressClickTimerRef.current = window.setTimeout(() => {
+      suppressClickRef.current = false
+      suppressClickTimerRef.current = null
+    }, 80)
   }
 
   useEffect(() => {
@@ -53,10 +76,17 @@ export function SortableListCard({
   }, [offset])
 
   useEffect(() => {
+    return () => {
+      clearSuppressClickTimer()
+    }
+  }, [])
+
+  useEffect(() => {
     if (closeSwipeSignal > 0) {
       setIsSwiping(false)
       pointerIdRef.current = null
       axisRef.current = 'none'
+      clearSuppressClickTimer()
       suppressClickRef.current = false
       applyOffset(0)
     }
@@ -67,6 +97,7 @@ export function SortableListCard({
       setIsSwiping(false)
       pointerIdRef.current = null
       axisRef.current = 'none'
+      clearSuppressClickTimer()
       suppressClickRef.current = false
       applyOffset(0)
     }
@@ -109,7 +140,6 @@ export function SortableListCard({
       }
 
       axisRef.current = 'horizontal'
-      suppressClickRef.current = true
       setIsSwiping(true)
       event.currentTarget.setPointerCapture(event.pointerId)
     }
@@ -135,17 +165,16 @@ export function SortableListCard({
     pointerIdRef.current = null
     setIsSwiping(false)
 
-    if (axisRef.current !== 'horizontal') {
-      axisRef.current = 'none'
+    const wasHorizontal = axisRef.current === 'horizontal'
+    axisRef.current = 'none'
+
+    if (!wasHorizontal) {
       return
     }
 
-    axisRef.current = 'none'
     const next = offsetRef.current <= -OPEN_THRESHOLD ? -ACTIONS_WIDTH : 0
-    if (next !== 0) {
-      suppressClickRef.current = true
-    }
     applyOffset(next)
+    suppressClickFromGesture()
   }
 
   function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
@@ -158,6 +187,7 @@ export function SortableListCard({
 
   function onFrontClick() {
     if (suppressClickRef.current) {
+      clearSuppressClickTimer()
       suppressClickRef.current = false
       return
     }
@@ -197,6 +227,16 @@ export function SortableListCard({
 
       <div className="list-card-swipe">
         <div className="list-card-actions" aria-hidden={!isOpen}>
+          <button
+            type="button"
+            className="list-card-action duplicate"
+            aria-label={`Duplicar ${list.name}`}
+            tabIndex={isOpen ? 0 : -1}
+            disabled={duplicateBusy}
+            onClick={() => onDuplicate(list)}
+          >
+            <Copy size={18} strokeWidth={2.1} aria-hidden="true" />
+          </button>
           <button
             type="button"
             className="list-card-action edit"
@@ -246,6 +286,9 @@ export function SortableListCard({
               total={list.totalTasks}
               compact
             />
+            {lastCompletedLabel ? (
+              <p className="list-card-meta">Última vez: {lastCompletedLabel}</p>
+            ) : null}
           </article>
         </div>
       </div>

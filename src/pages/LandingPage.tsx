@@ -7,6 +7,7 @@ import {
   Share2,
   WifiOff,
 } from 'lucide-react'
+import { Capacitor } from '@capacitor/core'
 import { Link } from 'react-router-dom'
 import heroImage from '../assets/landing/landing-hero.png'
 import homeImage from '../assets/landing/landing-home.png'
@@ -20,6 +21,8 @@ import travelImage from '../assets/landing/landing-travel.png'
 import { PlayStoreLink } from '../components/PlayStoreLink'
 
 export function LandingPage() {
+  const showPlayStore = !Capacitor.isNativePlatform()
+
   return (
     <div className="landing">
       <div className="landing-enter-bar">
@@ -28,11 +31,13 @@ export function LandingPage() {
           <p className="landing-enter-tag">Creador de listas de verificación</p>
         </div>
         <div className="landing-enter-actions">
-          <PlayStoreLink
-            className="btn btn-ghost landing-enter-btn landing-play-btn"
-            label="Google Play"
-            shortLabel="Play"
-          />
+          {showPlayStore ? (
+            <PlayStoreLink
+              className="btn btn-ghost landing-enter-btn landing-play-btn"
+              label="Google Play"
+              shortLabel="Play"
+            />
+          ) : null}
           <Link to="/app" className="btn btn-primary landing-enter-btn">
             <span className="landing-enter-label-full">Entrar a la app</span>
             <span className="landing-enter-label-short">Entrar</span>
@@ -61,7 +66,9 @@ export function LandingPage() {
                 <span>Entrar a la app</span>
                 <ArrowRight size={18} strokeWidth={2.3} aria-hidden="true" />
               </Link>
-              <PlayStoreLink className="btn btn-ghost landing-play-btn-on-hero" />
+              {showPlayStore ? (
+                <PlayStoreLink className="btn btn-ghost landing-play-btn-on-hero" />
+              ) : null}
             </div>
           </div>
         </div>
@@ -114,15 +121,17 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="landing-play-mid">
-        <p className="landing-kicker">App Android</p>
-        <h2>Descárgala en Google Play</h2>
-        <p>
-          Lleva tus listas en el móvil, con recordatorios nativos y sin cuentas. Disponible
-          en la Play Store.
-        </p>
-        <PlayStoreLink className="btn btn-primary" label="Descargar en Google Play" />
-      </section>
+      {showPlayStore ? (
+        <section className="landing-play-mid">
+          <p className="landing-kicker">App Android</p>
+          <h2>Descárgala en Google Play</h2>
+          <p>
+            Lleva tus listas en el móvil, con recordatorios nativos y sin cuentas. Disponible
+            en la Play Store.
+          </p>
+          <PlayStoreLink className="btn btn-primary" label="Descargar en Google Play" />
+        </section>
+      ) : null}
 
       <section className="landing-feature">
         <div className="landing-feature-copy">
@@ -227,7 +236,9 @@ export function LandingPage() {
             <span>Entrar a la app</span>
             <ArrowRight size={18} strokeWidth={2.3} aria-hidden="true" />
           </Link>
-          <PlayStoreLink className="btn btn-ghost" label="Google Play" />
+          {showPlayStore ? (
+            <PlayStoreLink className="btn btn-ghost" label="Google Play" />
+          ) : null}
         </div>
       </section>
     </div>

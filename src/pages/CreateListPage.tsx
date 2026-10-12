@@ -1,9 +1,9 @@
 import { Plus } from 'lucide-react'
-import { type FormEvent, type KeyboardEvent, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { type FormEvent, type KeyboardEvent, useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
 import { DatabaseError, createListWithTasks } from '../services/database'
-import { parseTaskLines } from '../utils/parseTasks'
+import { countTaskItems, parseListItems, parseTaskLines } from '../utils/parseTasks'
 
 const DEMO_LIST_NAME = 'Lista de prueba'
 const DEMO_TASKS = [
@@ -21,19 +21,32 @@ function isDemoListName(value: string): boolean {
 
 export function CreateListPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [name, setName] = useState('')
   const [rawTasks, setRawTasks] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const previewCount = parseTaskLines(rawTasks).length
+  useEffect(() => {
+    const sharedText = (location.state as { sharedText?: string } | null)?.sharedText
+    if (typeof sharedText === 'string' && sharedText.trim()) {
+      setRawTasks(sharedText.trim())
+      void navigate(location.pathname, { replace: true, state: null })
+    }
+  }, [location.pathname, location.state, navigate])
 
-  async function createList(listName: string, taskLines: string[]) {
+  const previewItems = parseListItems(rawTasks)
+  const previewTaskCount = countTaskItems(previewItems)
+  const previewSectionCount = previewItems.length - previewTaskCount
+
+  async function createList(listName: string, raw: string | string[]) {
     setBusy(true)
     setError(null)
 
     try {
-      const list = await createListWithTasks(listName, taskLines)
+      const items =
+        typeof raw === 'string' ? parseListItems(raw) : raw.map((text) => ({ text, kind: 'task' as const }))
+      const list = await createListWithTasks(listName, items)
       void navigate(`/lista/${list.id}`, { replace: true })
     } catch (cause) {
       const message =
@@ -54,7 +67,7 @@ export function CreateListPage() {
       return
     }
 
-    await createList(name, parseTaskLines(rawTasks))
+    await createList(name, rawTasks)
   }
 
   function handleNameKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -72,11 +85,27 @@ export function CreateListPage() {
     }
   }
 
+  function previewLabel(): string {
+    if (isDemoListName(name) && previewItems.length === 0) {
+      return 'Pulsa Enter en el nombre para crear una lista de prueba con 6 tareas'
+    }
+
+    const taskPart =
+      previewTaskCount === 1 ? '1 tarea' : `${previewTaskCount} tareas`
+    if (previewSectionCount <= 0) {
+      return `${taskPart} se crearán al guardar`
+    }
+
+    const sectionPart =
+      previewSectionCount === 1 ? '1 sección' : `${previewSectionCount} secciones`
+    return `${taskPart} y ${sectionPart} se crearán al guardar`
+  }
+
   return (
     <section className="page">
       <AppHeader
         title="Crear lista"
-        subtitle="Cada línea del texto se convertirá en una tarea"
+        subtitle="Cada línea es una tarea. Usa ## Título para secciones."
         backTo="/app"
       />
 
@@ -100,17 +129,11 @@ export function CreateListPage() {
           <textarea
             value={rawTasks}
             onChange={(event) => setRawTasks(event.target.value)}
-            placeholder={'Pasaporte\nCargador del móvil\nRopa interior\nNeceser\nZapatillas\nAdaptador de enchufe'}
+            placeholder={'## Documentos\nPasaporte\n## Electrónica\nCargador del móvil'}
             rows={14}
             required={!isDemoListName(name)}
           />
-          <small>
-            {isDemoListName(name) && previewCount === 0
-              ? 'Pulsa Enter en el nombre para crear una lista de prueba con 6 tareas'
-              : previewCount === 1
-                ? '1 tarea se creará al guardar'
-                : `${previewCount} tareas se crearán al guardar`}
-          </small>
+          <small>{previewLabel()}</small>
         </label>
 
         {error ? <p className="banner error">{error}</p> : null}

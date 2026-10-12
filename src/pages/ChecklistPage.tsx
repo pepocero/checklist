@@ -1,4 +1,4 @@
-import { ArrowLeft, Pencil, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Bell, BellRing, Pencil, RotateCcw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Capacitor } from '@capacitor/core'
@@ -11,9 +11,18 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { NoteDialog } from '../components/NoteDialog'
 import { ReminderDialog } from '../components/ReminderDialog'
 import { useChecklist } from '../hooks/useChecklist'
+import { DatabaseError, updateListReminder } from '../services/database'
+import {
+  ReminderError,
+  cancelListReminderSchedule,
+  ensureNotificationPermission,
+  scheduleListReminder,
+} from '../services/reminders'
 import type { Task } from '../types'
+import { formatLastCompletedAt } from '../utils/formatLastCompleted'
+import { isSectionTask } from '../utils/taskKind'
 import { getTaskNote } from '../utils/taskNote'
-import { getTaskReminderAt } from '../utils/taskReminder'
+import { getTaskReminderAt, taskHasReminder } from '../utils/taskReminder'
 import { addTaskReminderToCalendar } from '../utils/calendarReminder'
 
 export function ChecklistPage() {
@@ -30,6 +39,7 @@ export function ChecklistPage() {
     isComplete,
     toggleTask,
     resetTasks,
+    refresh,
   } = useChecklist(id)
   const [confirmReset, setConfirmReset] = useState(false)
   const [showCompletion, setShowCompletion] = useState(false)
@@ -37,7 +47,11 @@ export function ChecklistPage() {
   const [busy, setBusy] = useState(false)
   const [noteTask, setNoteTask] = useState<Task | null>(null)
   const [reminderTask, setReminderTask] = useState<Task | null>(null)
+  const [listReminderOpen, setListReminderOpen] = useState(false)
+  const [listReminderBusy, setListReminderBusy] = useState(false)
+  const [listReminderError, setListReminderError] = useState<string | null>(null)
   const [calendarBusy, setCalendarBusy] = useState(false)
+  const [localError, setLocalError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isComplete) {
@@ -68,6 +82,37 @@ export function ChecklistPage() {
     setCompletionDismissed(true)
   }
 
+  async function handleSaveListReminder(reminderAt: number | null) {
+    if (!list) {
+      return
+    }
+
+    setListReminderBusy(true)
+    setListReminderError(null)
+    try {
+      if (reminderAt !== null) {
+        await ensureNotificationPermission()
+      }
+      const updated = await updateListReminder(list.id, reminderAt)
+      if (reminderAt === null) {
+        await cancelListReminderSchedule(updated.id)
+      } else {
+        await scheduleListReminder(updated)
+      }
+      await refresh()
+      setListReminderOpen(false)
+      setLocalError(null)
+    } catch (cause) {
+      const message =
+        cause instanceof ReminderError || cause instanceof DatabaseError
+          ? cause.message
+          : 'No se pudo guardar el recordatorio de la lista.'
+      setListReminderError(message)
+    } finally {
+      setListReminderBusy(false)
+    }
+  }
+
   if (isReady && notFound) {
     return (
       <section className="page">
@@ -91,16 +136,25 @@ export function ChecklistPage() {
     )
   }
 
+  const lastCompletedLabel = formatLastCompletedAt(list.lastCompletedAt)
+  const displayError = localError ?? error
+  const sectionCount = tasks.filter((task) => isSectionTask(task)).length
+
   return (
     <section className="page">
       <AppHeader
         title={list.name}
+        subtitle={lastCompletedLabel ? `Última vez: ${lastCompletedLabel}` : undefined}
         backTo="/app"
       />
 
-      {error ? <p className="banner error">{error}</p> : null}
+      {displayError ? <p className="banner error">{displayError}</p> : null}
 
-      <ChecklistProgress completed={completedCount} total={totalCount} />
+      <ChecklistProgress
+        completed={completedCount}
+        total={totalCount}
+        sectionCount={sectionCount}
+      />
 
       {tasks.length === 0 ? (
         <div className="empty-state">
@@ -124,12 +178,36 @@ export function ChecklistPage() {
         </div>
       )}
 
-      {tasks.length > 0 ? (
-        <ActionBar ariaLabel="Acciones de la lista">
-          <Link to={`/lista/${list.id}/editar`} className="btn btn-edit">
-            <Pencil size={18} strokeWidth={2.1} aria-hidden="true" />
-            <span>Editar</span>
-          </Link>
+      <ActionBar ariaLabel="Acciones de la lista">
+        <button
+          type="button"
+          className={`icon-btn${taskHasReminder(list.reminderAt) ? ' has-list-reminder' : ''}`}
+          aria-label={
+            taskHasReminder(list.reminderAt)
+              ? 'Editar recordatorio de la lista'
+              : 'Añadir recordatorio a la lista'
+          }
+          title={
+            taskHasReminder(list.reminderAt)
+              ? 'Recordatorio activo'
+              : 'Recordatorio de la lista'
+          }
+          onClick={() => {
+            setListReminderError(null)
+            setListReminderOpen(true)
+          }}
+        >
+          {taskHasReminder(list.reminderAt) ? (
+            <BellRing size={18} strokeWidth={2.3} aria-hidden="true" />
+          ) : (
+            <Bell size={18} strokeWidth={2.1} aria-hidden="true" />
+          )}
+        </button>
+        <Link to={`/lista/${list.id}/editar`} className="btn btn-edit">
+          <Pencil size={18} strokeWidth={2.1} aria-hidden="true" />
+          <span>Editar</span>
+        </Link>
+        {tasks.length > 0 ? (
           <button
             type="button"
             className="btn btn-reset"
@@ -138,8 +216,8 @@ export function ChecklistPage() {
             <RotateCcw size={18} strokeWidth={2.1} aria-hidden="true" />
             <span>Reiniciar</span>
           </button>
-        </ActionBar>
-      ) : null}
+        ) : null}
+      </ActionBar>
 
       <NoteDialog
         open={noteTask !== null}
@@ -178,8 +256,32 @@ export function ChecklistPage() {
         onClose={() => setReminderTask(null)}
       />
 
+      <ReminderDialog
+        open={listReminderOpen}
+        taskText={list.name}
+        reminderAt={getTaskReminderAt(list.reminderAt)}
+        mode="edit"
+        busy={listReminderBusy}
+        error={listReminderError}
+        onClose={() => {
+          if (!listReminderBusy) {
+            setListReminderOpen(false)
+            setListReminderError(null)
+          }
+        }}
+        onSave={(reminderAt) => {
+          void handleSaveListReminder(reminderAt)
+        }}
+      />
+
       <CompletionDialog
-        open={showCompletion && !confirmReset && noteTask === null && reminderTask === null}
+        open={
+          showCompletion &&
+          !confirmReset &&
+          noteTask === null &&
+          reminderTask === null &&
+          !listReminderOpen
+        }
         totalTasks={totalCount}
         onAccept={acceptCompletion}
         onReset={() => setConfirmReset(true)}

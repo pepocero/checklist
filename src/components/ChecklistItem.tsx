@@ -1,5 +1,7 @@
-import { Bell, Check, StickyNote } from 'lucide-react'
+import { Bell, Check, Star, StickyNote } from 'lucide-react'
 import type { Task } from '../types'
+import { isSectionTask } from '../utils/taskKind'
+import { isHighPriorityTask } from '../utils/taskPriority'
 import { taskHasNote } from '../utils/taskNote'
 import { taskHasReminder } from '../utils/taskReminder'
 
@@ -16,11 +18,22 @@ export function ChecklistItem({
   onOpenNote,
   onOpenReminder,
 }: ChecklistItemProps) {
+  if (isSectionTask(task)) {
+    return (
+      <div className="checklist-section" role="heading" aria-level={3}>
+        <span className="checklist-section-title">{task.text}</span>
+      </div>
+    )
+  }
+
   const hasNote = taskHasNote(task.note)
   const hasReminder = taskHasReminder(task.reminderAt)
+  const isHigh = isHighPriorityTask(task)
 
   return (
-    <label className={`checklist-item ${task.completed ? 'is-done' : ''}`}>
+    <label
+      className={`checklist-item ${task.completed ? 'is-done' : ''} ${isHigh ? 'is-high-priority' : ''}`}
+    >
       <input
         type="checkbox"
         checked={task.completed}
@@ -29,7 +42,14 @@ export function ChecklistItem({
       <span className="check-box" aria-hidden="true">
         {task.completed ? <Check size={18} strokeWidth={3} /> : null}
       </span>
-      <span className="check-text">{task.text}</span>
+      <span className="check-text">
+        {isHigh ? (
+          <span className="priority-mark" aria-hidden="true">
+            <Star size={15} strokeWidth={2.2} />
+          </span>
+        ) : null}
+        <span className="check-text-label">{task.text}</span>
+      </span>
       <span className="checklist-item-actions">
         {hasReminder && onOpenReminder ? (
           <button

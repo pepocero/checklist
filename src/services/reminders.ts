@@ -1,14 +1,17 @@
 import {
   clearTaskReminder,
+  getListsWithReminders,
   getTasksWithReminders,
 } from './database'
-import type { Task } from '../types'
+import type { Task, TaskList } from '../types'
 import { getTaskReminderAt } from '../utils/taskReminder'
 import { ReminderError } from './reminderError'
 import {
+  cancelNativeListReminder,
   cancelNativeTaskReminder,
   ensureNativeNotificationPermission,
   isNativeApp,
+  scheduleNativeListReminder,
   scheduleNativeTaskReminder,
   startNativeReminderListeners,
 } from './nativeReminders'
@@ -66,6 +69,14 @@ export async function ensureNotificationPermission(): Promise<NotificationPermis
 
 function reminderTag(taskId: string): string {
   return `task-reminder-${taskId}`
+}
+
+function listReminderTag(listId: string): string {
+  return `list-reminder-${listId}`
+}
+
+function listTimerKey(listId: string): string {
+  return `list:${listId}`
 }
 
 async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
@@ -224,12 +235,125 @@ export async function scheduleTaskReminder(task: Task): Promise<void> {
   timers.set(task.id, timerId)
 }
 
+async function cancelBrowserListNotification(listId: string): Promise<void> {
+  const registration = await getServiceWorkerRegistration()
+  if (!registration?.getNotifications) {
+    return
+  }
+
+  const existing = await registration.getNotifications({ tag: listReminderTag(listId) })
+  for (const notification of existing) {
+    notification.close()
+  }
+}
+
+async function displayListReminderNotification(list: TaskList): Promise<void> {
+  const options: NotificationOptions = {
+    body: list.name,
+    tag: listReminderTag(list.id),
+    icon: '/pwa-icon-192.png',
+    badge: '/pwa-icon-192.png',
+    data: {
+      url: `/lista/${list.id}`,
+      listId: list.id,
+    },
+  }
+
+  const registration = await getServiceWorkerRegistration()
+  if (registration?.showNotification) {
+    await registration.showNotification('Recordatorio de lista', options)
+    return
+  }
+
+  new Notification('Recordatorio de lista', options)
+}
+
+export async function cancelListReminderSchedule(listId: string): Promise<void> {
+  clearScheduledTimer(listTimerKey(listId))
+  try {
+    await cancelBrowserListNotification(listId)
+  } catch {
+    // Ignorar.
+  }
+  try {
+    await cancelNativeListReminder(listId)
+  } catch {
+    // Ignorar.
+  }
+}
+
+export async function scheduleListReminder(list: TaskList): Promise<void> {
+  const key = listTimerKey(list.id)
+  clearScheduledTimer(key)
+
+  const reminderAt = getTaskReminderAt(list.reminderAt)
+  if (reminderAt === null) {
+    return
+  }
+
+  if (isNativeApp()) {
+    await scheduleNativeListReminder(list)
+    return
+  }
+
+  if (!notificationsSupported() || Notification.permission !== 'granted') {
+    return
+  }
+
+  void cancelBrowserListNotification(list.id).catch(() => undefined)
+
+  const delay = reminderAt - Date.now()
+  if (delay <= 0) {
+    await displayListReminderNotification(list)
+    return
+  }
+
+  const wait = Math.min(delay, MAX_TIMEOUT_MS)
+  const timerId = window.setTimeout(() => {
+    void (async () => {
+      timers.delete(key)
+      try {
+        const latest = (await getListsWithReminders()).find((item) => item.id === list.id)
+        if (!latest || getTaskReminderAt(latest.reminderAt) === null) {
+          return
+        }
+
+        const latestAt = getTaskReminderAt(latest.reminderAt)
+        if (latestAt === null) {
+          return
+        }
+
+        if (latestAt > Date.now() + 1_000) {
+          await scheduleListReminder(latest)
+          return
+        }
+
+        await displayListReminderNotification(latest)
+      } catch {
+        // Evitar fallos silenciosos del timer.
+      }
+    })()
+  }, wait)
+
+  timers.set(key, timerId)
+}
+
 export async function syncAllTaskReminders(): Promise<void> {
   if (isNativeApp()) {
-    const tasks = await getTasksWithReminders()
+    const [tasks, lists] = await Promise.all([
+      getTasksWithReminders(),
+      getListsWithReminders(),
+    ])
     for (const task of tasks) {
       try {
         await scheduleNativeTaskReminder(task)
+      } catch {
+        // Continuar con el resto.
+      }
+    }
+    for (const list of lists) {
+      try {
+        await scheduleNativeListReminder(list)
       } catch {
         // Continuar con el resto.
       }
@@ -241,18 +365,32 @@ export async function syncAllTaskReminders(): Promise<void> {
     return
   }
 
-  const tasks = await getTasksWithReminders()
-  const activeIds = new Set(tasks.map((task) => task.id))
+  const [tasks, lists] = await Promise.all([
+    getTasksWithReminders(),
+    getListsWithReminders(),
+  ])
+  const activeIds = new Set([
+    ...tasks.map((task) => task.id),
+    ...lists.map((list) => listTimerKey(list.id)),
+  ])
 
-  for (const taskId of [...timers.keys()]) {
-    if (!activeIds.has(taskId)) {
-      clearScheduledTimer(taskId)
+  for (const timerId of [...timers.keys()]) {
+    if (!activeIds.has(timerId)) {
+      clearScheduledTimer(timerId)
     }
   }
 
   for (const task of tasks) {
     try {
       await scheduleTaskReminder(task)
+    } catch {
+      // Continuar con el resto.
+    }
+  }
+
+  for (const list of lists) {
+    try {
+      await scheduleListReminder(list)
     } catch {
       // Continuar con el resto.
     }

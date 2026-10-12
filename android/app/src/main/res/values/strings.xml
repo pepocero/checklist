@@ -4,4 +4,6 @@
     <string name="title_activity_main">Checklist</string>
     <string name="package_name">com.carlinitools.checklist</string>
     <string name="custom_url_scheme">com.carlinitools.checklist</string>
+    <string name="widget_description">Abre y marca tareas de una lista</string>
+    <string name="widget_name">Checklist</string>
 </resources>
